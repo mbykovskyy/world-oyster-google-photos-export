@@ -1,0 +1,84 @@
+:root {
+  --bg: #fff; --fg: #202124; --muted: #5f6368; --line: #dadce0; --btn: #f1f3f4; --accent: #f29900;
+  --danger: #c5221f; --noloc: #d93025; --warn: #b06000;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #202124; --fg: #e8eaed; --muted: #9aa0a6; --line: #3c4043; --btn: #303134; --danger: #f28b82; --noloc: #f28b82; --warn: #fdd663; }
+}
+/* Side panel: fill whatever width/height Chrome gives it; only the list scrolls. */
+html, body { height: 100%; }
+body {
+  margin: 0; padding: 12px; box-sizing: border-box; min-width: 0;
+  display: flex; flex-direction: column;
+  background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif;
+}
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+h1 { font-size: 16px; margin: 0; }
+.muted { color: var(--muted); }
+#count .noloc { color: var(--noloc); font-weight: 600; }
+.switch { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.switch input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.actions { display: flex; gap: 6px; margin-bottom: 10px; }
+button { font: inherit; color: var(--fg); background: var(--btn); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: default; }
+button[hidden] { display: none; }
+button.danger { color: var(--danger); margin-left: auto; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+#export-status { margin: 0 0 10px; padding: 6px 8px; border-radius: 6px; background: var(--btn); font-size: 12px; }
+#export-status code { font-size: 11px; word-break: break-all; }
+#export-status details { margin-top: 4px; }
+#export-status progress { width: 100%; accent-color: var(--accent); }
+#empty { margin: 4px 0; }
+
+.actions, header, #export-status, #empty, footer { flex: none; }
+.noloc { color: var(--noloc); font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+
+/* Masonry grid: columns built by panel.js; only the grid scrolls. */
+/* scrollbar-gutter: the scrollbar appearing must not change the grid's width (and column count). */
+#grid { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; display: flex; gap: 6px; align-items: flex-start; }
+#grid .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.tile { position: relative; border-radius: 6px; overflow: hidden; background: var(--btn); }
+.tile img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
+.tile .nopreview { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 10px; color: var(--muted); cursor: pointer; }
+
+.tile .pill {
+  position: absolute; top: 5px; left: 5px; display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 6px 1px 4px; border-radius: 9px; font: 600 10px/15px system-ui, sans-serif; color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.tile .pill svg { width: 12px; height: 12px; }
+.tile .noloc-pill { background: #d93025; }
+.tile .error { background: #b06000; }
+.tile .loading { background: rgba(32, 33, 36, 0.8); }
+.tile .spin { width: 8px; height: 8px; margin-right: 2px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.tile .video { position: absolute; right: 6px; bottom: 4px; color: #fff; font-size: 11px; text-shadow: 0 0 3px #000; pointer-events: none; }
+
+/* Same orange checkbox as the one on Google Photos tiles (content.css .wo-check). */
+.tile .check {
+  position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; padding: 0;
+  box-sizing: border-box; border: 2px solid #fff; border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  cursor: pointer; transition: transform 0.1s;
+}
+.tile .check:hover { transform: scale(1.08); }
+.tile .check[aria-checked="true"] {
+  background: #f29900 no-repeat center / 17px
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg>');
+  border-color: #f29900;
+}
+/* Place and date: shown on hover. */
+.tile .info {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 6px 6px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75)); color: #fff; font-size: 11px;
+  opacity: 0; pointer-events: none;
+}
+.tile:hover .info, .tile:focus-within .info { opacity: 1; pointer-events: auto; }
+.tile:hover .video, .tile:focus-within .video { opacity: 0; }
+.tile .line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .dim { opacity: 0.8; }
+.warn { color: var(--warn); }
+footer { margin-top: 8px; font-size: 11px; }
+footer a { color: inherit; }

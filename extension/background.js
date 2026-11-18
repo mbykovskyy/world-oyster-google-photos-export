@@ -3,6 +3,20 @@ import { placeToCoords, placeFor } from './geo.js';
 
 const PHOTOS_ORIGIN = 'https://photos.google.com/';
 
+// ---------- side panel, per tab ----------
+// The panel is off by default and turned on only for the tab whose toolbar button
+// was clicked. Chrome then shows it in that tab only: switching to another tab hides
+// it, switching back shows it again, and each tab you click it in gets its own.
+// The tab id is passed to the panel so Export runs in that tab.
+chrome.sidePanel.setOptions({ enabled: false }).catch(() => {});
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+
+chrome.action.onClicked.addListener((tab) => {
+  // No awaits before open(): Chrome only opens a side panel during the click itself.
+  chrome.sidePanel.setOptions({ tabId: tab.id, path: `panel.html?tab=${tab.id}`, enabled: true });
+  chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+});
+
 // The toolbar button is disabled everywhere except Google Photos tabs whose
 // content script has reported a signed-in session.
 chrome.action.disable();

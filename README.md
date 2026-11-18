@@ -20,12 +20,16 @@ World Oyster slideshow (`../world-oyster`).
   **Add this photo** button.
 - The selection is saved in `chrome.storage.local` as you go (one `sel:<photoId>`
   key per photo), so you can close the tab and continue later.
-- The popup shows your selection, lets you remove items, switch the picker
+- Clicking the toolbar button opens a side panel on the right, for that tab only:
+  other tabs don't show it, and it comes back when you return to the tab. Each tab
+  you click the button in gets its own panel. It shows your
+  selection as a masonry grid (newest first; hover a tile for its place and date,
+  untick its orange box to remove it; click to open it in Google Photos), lets you switch the picker
   off, and **Export** everything as one zip (see below).
 
 ## Export
 
-**Export** in the popup downloads one zip, `world-oyster-export-YYYY-MM-DD-HHMMSS.zip`:
+**Export** in the side panel downloads one zip, `world-oyster-export-YYYY-MM-DD-HHMMSS.zip`:
 
 ```
 photos.csv             sha,url,date_local,content,place,latitude,longitude,location_method,type
@@ -61,7 +65,7 @@ fills in its details with Google Photos' photo-details RPC (`fDcn4b`, called fro
 | `sha` | SHA-256 hex of `https://photos.google.com/photo/<id>` (no `/u/N/`) |
 | `url` | `https://photos.google.com/photo/<id>` |
 | `date_local` | taken-at UTC time + the timezone offset Google stores for the photo |
-| `content` | picked by you: the panel's dropdown sets it for new selections; change it per photo in the popup |
+| `content` | always blank (no category is determined) |
 | `place` | Google's place name for the photo; if Google has no name, or only a region/country ("California, USA"), the nearest town from GeoNames (offline) |
 | `latitude`/`longitude` | camera GPS → `camera GPS`; otherwise Google's location → `Google estimated`; otherwise Google's place name looked up on OpenStreetMap → `Google Photos recognised the place as "…"; coordinates from OpenStreetMap`; otherwise the location (and place) of the nearest-in-time photo with a location taken the same local day → `estimated from nearest located photo (5 min later)` |
 | `type` | `video` if the file name has a video extension, else `photo` |
@@ -69,7 +73,7 @@ fills in its details with Google Photos' photo-details RPC (`fDcn4b`, called fro
 The same-day photos come from your whole library (Google Photos' `lcxiM`
 library-by-date RPC), not just your selection. Photos with no location even then
 get a red **No location** label on their tile, in the
-panel and in the popup, and their location fields are left empty in the export.
+floating bar and in the side panel, and their location fields are left empty in the export.
 
 ## Geolocation services
 
@@ -95,7 +99,7 @@ panel and in the popup, and their location fields are left empty in the export.
   python3 tools/build_places.py /path/to/geonames
   ```
 
-  GeoNames data is CC BY 4.0; the popup credits it.
+  GeoNames data is CC BY 4.0; the side panel credits it.
 
 Details can only be fetched from a Google Photos tab signed in to the account
 that owns the photo (`/u/N/`). Pending photos fill in once you open that account.

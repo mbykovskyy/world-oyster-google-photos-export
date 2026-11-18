@@ -3,7 +3,6 @@
 // photo's details (date, location, type) from Google Photos' own photo-details RPC.
 (() => {
   const SEL_PREFIX = 'sel:';
-  const CONTENT_OPTIONS = ['Landscape / nature', 'City / architecture', 'People / street life'];
   const ID_RE = /photo\/(AF1Qip[\w-]+)/;
   const TILE_LINK = 'a[href*="photo/AF1Qip"]';
   const VIDEO_EXT = /\.(mp4|mov|m4v|3gp|avi|mkv|webm|mts|m2ts|wmv)$/i;
@@ -12,7 +11,6 @@
   let enabled = true;
   let loggedIn = false;
   let reportedLoggedIn = null;
-  let contentDefault = CONTENT_OPTIONS[0];
   const records = new Map(); // id -> stored selection record
   let lastClickedId = null;
   let panel = null;
@@ -57,7 +55,7 @@
       sha: null,
       url: canonicalUrl(id),
       date_local: null,
-      content: contentDefault,
+      content: null, // not determined: exported blank
       place: null,
       latitude: null,
       longitude: null,
@@ -99,7 +97,7 @@
   }
 
   // ---------- preview thumbnail ----------
-  // Google's thumbnail URLs only work with your Google cookies, which the popup
+  // Google's thumbnail URLs only work with your Google cookies, which the side panel
   // (a chrome-extension:// page) doesn't get. So the content script, which runs on
   // photos.google.com, fetches a small copy and stores it as a WebP data URL (~5 KB).
 
@@ -136,13 +134,21 @@
     return [(b.width - side) / 2, (b.height - side) / 2, side, side];
   };
 
+  // Uncropped (longest side 240 px) so the side panel's masonry tiles keep each photo's shape.
+  const PREVIEW_VERSION = 2; // 1 = old 104 px square crops
   async function makePreview(thumb, account) {
-    const blob = await fetchImage(thumb, account, 'w104-h104-c-k-no');
-    return blobToDataUrl(await encodeWebp(blob, 0, 0, 0.7));
+    const blob = await fetchImage(thumb, account, 's240');
+    const bitmap = await createImageBitmap(blob);
+    const size = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return { preview: await blobToDataUrl(await encodeWebp(blob, 0, 0, 0.7)), previewVersion: PREVIEW_VERSION, ...size };
   }
 
-  // null = tried and failed (don't retry endlessly); undefined = not tried yet.
-  const previewFor = (rec) => (rec.thumb ? makePreview(rec.thumb, rec.account).catch(() => null) : Promise.resolve(null));
+  // Resolves to fields to merge into the record. preview null = tried and failed (not retried).
+  const previewFor = (rec) => (rec.thumb
+    ? makePreview(rec.thumb, rec.account).catch(() => ({ preview: null, previewVersion: PREVIEW_VERSION }))
+    : Promise.resolve({ preview: null, previewVersion: PREVIEW_VERSION }));
+  const needsPreview = (rec) => rec.previewVersion !== PREVIEW_VERSION;
 
   // ---------- photo details ----------
 
@@ -213,7 +219,9 @@
     if (!x) throw new Error('Photo not found in this Google account');
 
     const out = { sha: await sha256Hex(canonicalUrl(rec.id)) };
-    if (!rec.preview) out.preview = await previewFor(rec);
+    // Photo dimensions (x[6] × x[7]) give tiles their shape even before a preview exists.
+    if (x[6] && x[7]) Object.assign(out, { width: x[6], height: x[7] });
+    if (needsPreview(rec)) Object.assign(out, await previewFor(rec));
     if (typeof x[3] === 'number') out.date_local = new Date(x[3] + (x[4] || 0)).toISOString().slice(0, 19);
     out.type = VIDEO_EXT.test(x[2] || '') ? 'video' : rec.type || 'photo';
 
@@ -260,7 +268,7 @@
   // and previews for records saved before previews existed.
   const inFlight = new Set();
   const MAX_PARALLEL = 3;
-  const needsPreviewOnly = (rec) => rec.status === 'ok' && rec.preview === undefined && !!rec.thumb;
+  const needsPreviewOnly = (rec) => rec.status === 'ok' && !!rec.thumb && needsPreview(rec);
   function pumpDetails() {
     if (!loggedIn) return;
     const account = accountIndex();
@@ -273,7 +281,7 @@
           .then((details) => ({ ...details, status: 'ok', error: null }))
           .catch((err) => ({ status: 'error', error: String(err.message || err) }));
       } else if (needsPreviewOnly(rec)) {
-        work = previewFor(rec).then((preview) => ({ preview }));
+        work = previewFor(rec);
       } else continue;
       inFlight.add(rec.id);
       work
@@ -293,7 +301,7 @@
   // ---------- export: one zip with photos.csv + photo/, thumbnail/, icon/ ----------
   // Runs here because only photos.google.com pages can fetch Google's images.
   // One progress step per photo; progress is kept in storage under "exportProgress"
-  // so the popup can show it (and survive being closed and reopened).
+  // so the side panel can show it (and survive being closed and reopened).
 
   let exporting = false;
 
@@ -361,7 +369,7 @@
         if (!results[i]) continue;
         for (const dir of ['photo', 'thumbnail', 'icon']) await zip.add(`${dir}/${rec.sha}.webp`, results[i][dir]);
         results[i] = null; // let the blobs go once they're in the zip
-        if (i % 25 === 0) await save(); // heartbeat, so the popup knows we're still zipping
+        if (i % 25 === 0) await save(); // heartbeat, so the side panel knows we're still zipping
       }
       saveBlob(zip.finish(), filename);
     } catch (err) {
@@ -395,7 +403,6 @@
     if (area !== 'local') return;
     for (const [key, { newValue }] of Object.entries(changes)) {
       if (key === 'enabled') enabled = newValue !== false;
-      else if (key === 'contentDefault') contentDefault = newValue || CONTENT_OPTIONS[0];
       else if (key.startsWith(SEL_PREFIX)) {
         const id = key.slice(SEL_PREFIX.length);
         newValue ? records.set(id, newValue) : records.delete(id);
@@ -478,11 +485,7 @@
       panel.innerHTML = `
         <span class="wo-count"></span>
         <span class="wo-missing" title="Selected photos without a location"></span>
-        <label class="wo-content" title="Content category for newly selected photos">
-          <select>${CONTENT_OPTIONS.map((c) => `<option>${c}</option>`).join('')}</select>
-        </label>
         <span class="wo-this-wrap"><button class="wo-this" type="button"></button></span>`;
-      panel.querySelector('select').addEventListener('change', (e) => chrome.storage.local.set({ contentDefault: e.target.value }));
       document.documentElement.appendChild(panel);
     }
     const all = [...records.values()];
@@ -495,8 +498,6 @@
       miss.innerHTML = `${PIN_OFF_SVG}No location: ${missing}`;
       miss.dataset.n = String(missing);
     }
-    const select = panel.querySelector('select');
-    if (document.activeElement !== select) select.value = contentDefault;
 
     const id = viewerPhotoId();
     const wrap = panel.querySelector('.wo-this-wrap');
@@ -586,16 +587,20 @@
 
   chrome.storage.local.get(null).then(async (all) => {
     enabled = all.enabled !== false;
-    contentDefault = all.contentDefault || CONTENT_OPTIONS[0];
     const upgrade = {};
     for (const [key, rec] of Object.entries(all)) {
       if (!key.startsWith(SEL_PREFIX)) continue;
+      let next = rec;
       // Records from v0.1 had no details: queue them.
-      if (!rec.status) upgrade[key] = { ...rec, url: canonicalUrl(rec.id), content: rec.content || contentDefault, status: 'pending' };
+      if (!rec.status) next = { ...next, url: canonicalUrl(rec.id), status: 'pending' };
       // Located-less records from before the same-day rule: fetch again once.
-      else if (rec.status === 'ok' && rec.latitude == null && !rec.sameDayChecked) upgrade[key] = { ...rec, status: 'pending' };
-      records.set(rec.id, upgrade[key] || rec);
+      else if (rec.status === 'ok' && rec.latitude == null && !rec.sameDayChecked) next = { ...next, status: 'pending' };
+      // The content category is no longer chosen by hand: export it blank.
+      if (next.content) next = { ...next, content: null };
+      if (next !== rec) upgrade[key] = next;
+      records.set(rec.id, next);
     }
+    if ('contentDefault' in all) await chrome.storage.local.remove('contentDefault');
     if (Object.keys(upgrade).length) await chrome.storage.local.set(upgrade);
     tick();
     pumpDetails();

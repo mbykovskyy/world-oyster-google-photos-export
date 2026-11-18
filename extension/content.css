@@ -65,8 +65,7 @@
 }
 .wo-panel [hidden] { display: none !important; }
 .wo-missing { display: inline-flex; align-items: center; gap: 3px; color: #f28b82; font-weight: 600; }
-.wo-panel button,
-.wo-panel select {
+.wo-panel button {
   font: inherit;
   color: #fff;
   background: #3c4043;
@@ -75,7 +74,6 @@
   padding: 5px 12px;
   cursor: pointer;
 }
-.wo-panel select option { background: #303134; }
-.wo-panel button:hover, .wo-panel select:hover { background: #5f6368; }
+.wo-panel button:hover { background: #5f6368; }
 .wo-panel button.wo-on { background: #f29900; }
 .wo-this-wrap { display: inline-flex; align-items: center; gap: 6px; }

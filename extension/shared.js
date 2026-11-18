@@ -1,23 +1,21 @@
-// Shared by popup.js and background.js (content scripts can't use ES module imports,
-// so content.js repeats SEL_PREFIX and CONTENT_OPTIONS).
+// Shared by panel.js and background.js (content scripts can't use ES module imports,
+// so content.js repeats SEL_PREFIX).
 //
 // Storage layout in chrome.storage.local:
 //   "enabled"         -> boolean (default true): show the selection overlay on Google Photos
-//   "contentDefault"  -> content category given to newly selected photos
 //   "geo:<query>"     -> cached OpenStreetMap geocode { lat, lng } or null
-//   "exportProgress"  -> { running, folder, total, done, failed: [{ id, error }], skipped, heartbeat, finishedAt }
+//   "exportProgress"  -> { running, filename, total, done, failed: [{ id, error }], skipped, heartbeat, finishedAt }
 //   "sel:<photoId>"   -> selection record:
 //      { id, account, sha, url, date_local, content, place, latitude, longitude,
 //        location_method, type, thumb, preview, status: 'pending' | 'ok' | 'error', error, addedAt }
 //      thumb   = Google's base thumbnail URL (only loads with Google cookies)
-//      preview = small WebP data URL made from it on photos.google.com, shown in the popup
+//      preview = small WebP data URL made from it on photos.google.com, shown in the side panel
 // One key per photo so selections made in different tabs never overwrite each other.
 
 export const SEL_PREFIX = 'sel:';
 
-export const CONTENT_OPTIONS = ['Landscape / nature', 'City / architecture', 'People / street life'];
-
 // Export columns, same as world-oyster/google_photos_landscape_city_people.csv.
+// "content" is kept as a column but left blank (no category is determined).
 export const EXPORT_FIELDS = ['sha', 'url', 'date_local', 'content', 'place', 'latitude', 'longitude', 'location_method', 'type'];
 
 export const byDate = (a, b) => (a.date_local || '').localeCompare(b.date_local || '') || a.addedAt - b.addedAt;

@@ -1,4 +1,4 @@
-import { SEL_PREFIX, CONTENT_OPTIONS, loadSelection, hasLocation, thumbUrl, accountUrl, byDate } from './shared.js';
+import { SEL_PREFIX, loadSelection, hasLocation, thumbUrl, accountUrl, byDate } from './shared.js';
 
 const $ = (id) => document.getElementById(id);
 const PIN_OFF_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/><path d="M3.5 3.5l17 17" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
@@ -9,52 +9,88 @@ const el = (tag, props = {}, ...children) => {
   return node;
 };
 
-function row(r) {
-  const thumb = el('div', { className: 'thumb', title: 'Open in Google Photos' });
-  thumb.onclick = () => chrome.tabs.create({ url: accountUrl(r) });
-  const src = r.preview || thumbUrl(r, 104);
-  const noPreview = () => el('span', { className: 'nopreview', textContent: 'no preview' });
-  if (src) {
-    const img = el('img', { src, loading: 'lazy', alt: '' });
-    img.onerror = () => img.replaceWith(noPreview());
-    thumb.append(img);
-  } else {
-    thumb.append(noPreview());
-  }
-  if (r.type === 'video') thumb.append(el('span', { className: 'video', textContent: '▶ video' }));
+// Height/width of a photo's tile: from the preview's or photo's size; square until known.
+const tileRatio = (r) => (r.width && r.height ? Math.min(3, Math.max(0.33, r.height / r.width)) : 1);
 
-  const date = el('div', { className: 'line muted', textContent: r.date_local ? r.date_local.replace('T', ' ') : '—' });
-  const where = el('div', { className: 'line' });
-  if (r.status === 'pending') {
-    where.className += ' muted';
-    where.textContent = 'Fetching details… (open Google Photos in this account)';
-  } else if (r.status === 'error') {
-    where.className += ' warn';
-    where.textContent = `⚠ ${r.error || 'Could not fetch details'}`;
-  } else if (!hasLocation(r)) {
-    where.innerHTML = `<span class="noloc">${PIN_OFF_SVG}No location</span>`;
-    if (r.place) where.append(` ${r.place}`);
-  } else {
-    where.textContent = r.place || `${r.latitude}, ${r.longitude}`;
-    where.title = `${r.latitude}, ${r.longitude} — ${r.location_method}`;
-  }
+// One masonry tile: the image at its own shape, a status label (always visible), and
+// date / place / content on hover.
+function tile(r) {
+  const node = el('div', { className: 'tile' });
+  node.style.aspectRatio = `1 / ${tileRatio(r)}`;
 
-  const content = el('select', { title: 'Content' }, ...CONTENT_OPTIONS.map((c) => el('option', { textContent: c })));
-  content.value = r.content || CONTENT_OPTIONS[0];
-  content.onchange = async () => {
-    const key = SEL_PREFIX + r.id;
-    const { [key]: current } = await chrome.storage.local.get(key);
-    if (current) await chrome.storage.local.set({ [key]: { ...current, content: content.value } });
+  const src = r.preview || thumbUrl(r, 240);
+  const open = () => chrome.tabs.create({ url: accountUrl(r) });
+  const noPreview = () => {
+    const ph = el('div', { className: 'nopreview', textContent: r.status === 'pending' ? '' : 'no preview', title: 'Open in Google Photos' });
+    ph.onclick = open;
+    return ph;
   };
+  if (src) {
+    const img = el('img', { src, loading: 'lazy', alt: '', title: 'Open in Google Photos' });
+    img.onclick = open;
+    img.onerror = () => img.replaceWith(noPreview());
+    node.append(img);
+  } else {
+    node.append(noPreview());
+  }
 
-  const rm = el('button', { className: 'remove', textContent: '×', title: 'Remove from selection' });
-  const li = el('li', {}, thumb, el('div', { className: 'meta' }, date, where, content), rm);
+  // Status label, top-left: loading / failed / No location.
+  if (r.status === 'pending') {
+    node.append(el('span', { className: 'pill loading', title: 'Fetching details (open Google Photos in this account)', innerHTML: '<span class="spin"></span>details…' }));
+  } else if (r.status === 'error') {
+    node.append(el('span', { className: 'pill error', textContent: '⚠ no details', title: r.error || 'Could not fetch details' }));
+  } else if (!hasLocation(r)) {
+    node.append(el('span', { className: 'pill noloc-pill', innerHTML: `${PIN_OFF_SVG}No location`, title: 'No location found for this photo or any photo from the same day' }));
+  }
+  if (r.type === 'video') node.append(el('span', { className: 'video', textContent: '▶' }));
+
+  // Same orange checkbox as on Google Photos tiles; unticking removes the photo.
+  const rm = el('button', { className: 'check', type: 'button', role: 'checkbox', title: 'Selected: untick to remove' });
+  rm.setAttribute('aria-checked', 'true');
   rm.onclick = () => {
-    li.remove(); // update the list right away; storage change re-renders the counts
+    rm.setAttribute('aria-checked', 'false');
+    node.remove(); // update the grid right away; the storage change re-renders the rest
     chrome.storage.local.remove(SEL_PREFIX + r.id);
   };
-  return li;
+
+  const place = el('div', { className: 'line', textContent: r.place || (hasLocation(r) ? `${r.latitude}, ${r.longitude}` : '') });
+  if (hasLocation(r)) place.title = `${r.latitude}, ${r.longitude} — ${r.location_method}`;
+  const date = el('div', { className: 'line dim', textContent: r.date_local ? r.date_local.replace('T', ' ') : '' });
+  node.append(rm, el('div', { className: 'info' }, place, date));
+  return { node, ratio: tileRatio(r) };
 }
+
+// ---------- masonry layout ----------
+// Tiles go, newest first, into whichever column is currently shortest, so the order
+// reads roughly left-to-right, top-to-bottom. Columns follow the panel's width.
+
+const MIN_TILE_PX = 130;
+let tiles = [];
+let columnCount = 0;
+
+function layout(force = false) {
+  const grid = $('grid');
+  const cols = Math.max(2, Math.floor((grid.clientWidth + 6) / (MIN_TILE_PX + 6)));
+  if (!force && cols === columnCount) return;
+  columnCount = cols;
+  const columns = Array.from({ length: cols }, () => el('div', { className: 'col' }));
+  const heights = new Array(cols).fill(0);
+  for (const t of tiles) {
+    const i = heights.indexOf(Math.min(...heights));
+    columns[i].append(t.node);
+    heights[i] += t.ratio + 0.05; // + gap, in tile-width units
+  }
+  grid.replaceChildren(...columns);
+}
+
+// Re-layout on the next frame, not inside the ResizeObserver callback: changing the
+// grid there can resize it again in the same pass, which Chrome reports as a
+// "ResizeObserver loop completed with undelivered notifications" error.
+let layoutFrame = 0;
+new ResizeObserver(() => {
+  cancelAnimationFrame(layoutFrame);
+  layoutFrame = requestAnimationFrame(() => layout());
+}).observe(document.getElementById('grid'));
 
 async function render() {
   const records = (await loadSelection()).sort(byDate);
@@ -74,15 +110,12 @@ async function render() {
   $('retry').hidden = !failed;
   $('retry').textContent = `Retry ${failed} failed`;
 
-  // Keep scroll position stable, and don't rebuild under a content dropdown you're using.
-  const list = $('list');
-  const scroll = list.scrollTop;
-  if (document.activeElement?.tagName === 'SELECT' && list.contains(document.activeElement)) {
-    document.activeElement.addEventListener('blur', render, { once: true });
-    return;
-  }
-  list.replaceChildren(...records.slice().reverse().map(row));
-  list.scrollTop = scroll;
+  // Keep the scroll position across re-renders.
+  const grid = $('grid');
+  const scroll = grid.scrollTop;
+  tiles = records.slice().reverse().map(tile);
+  layout(true);
+  grid.scrollTop = scroll;
 }
 
 // ---------- export (runs in the Google Photos tab, saves one zip) ----------
@@ -118,15 +151,29 @@ function renderExport(p) {
   }
 }
 
+// The panel belongs to the tab whose toolbar button opened it (?tab=<id>); export runs
+// there. Falls back to any Google Photos tab in this window if that tab is gone.
+const ownerTabId = Number(new URLSearchParams(location.search).get('tab')) || null;
+
+async function exportTab() {
+  if (ownerTabId) {
+    const tab = await chrome.tabs.get(ownerTabId).catch(() => null);
+    if (tab?.url?.startsWith('https://photos.google.com/')) return tab;
+  }
+  const tabs = await chrome.tabs.query({ url: 'https://photos.google.com/*', currentWindow: true });
+  return tabs.find((t) => t.active) || tabs[0] || null;
+}
+
 $('export').onclick = async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   try {
+    const tab = await exportTab();
+    if (!tab) throw new Error('no Google Photos tab is open in this window');
     const res = await chrome.tabs.sendMessage(tab.id, { type: 'export' });
     if (res?.error) throw new Error(res.error);
   } catch (e) {
     const box = $('export-status');
     box.hidden = false;
-    box.textContent = `Couldn't start the export: ${e.message}. Open this popup from a Google Photos tab (refresh it after reloading the extension).`;
+    box.textContent = `Couldn't start the export: ${e.message}. Open Google Photos in this window (refresh it after reloading the extension) and try again.`;
   }
 };
 
