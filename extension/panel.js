@@ -21,7 +21,7 @@ function tile(r) {
   const src = r.preview || thumbUrl(r, 240);
   const open = () => chrome.tabs.create({ url: accountUrl(r) });
   const noPreview = () => {
-    const ph = el('div', { className: 'nopreview', textContent: r.status === 'pending' ? '' : 'no preview', title: 'Open in Google Photos' });
+    const ph = el('div', { className: 'nopreview', textContent: 'no preview', title: 'Open in Google Photos' });
     ph.onclick = open;
     return ph;
   };
@@ -34,10 +34,8 @@ function tile(r) {
     node.append(noPreview());
   }
 
-  // Status label, top-left: loading / failed / No location.
-  if (r.status === 'pending') {
-    node.append(el('span', { className: 'pill loading', title: 'Fetching details (open Google Photos in this account)', innerHTML: '<span class="spin"></span>details…' }));
-  } else if (r.status === 'error') {
+  // Status label, top-left: failed / No location. (Loading photos aren't shown at all.)
+  if (r.status === 'error') {
     node.append(el('span', { className: 'pill error', textContent: '⚠ no details', title: r.error || 'Could not fetch details' }));
   } else if (!hasLocation(r)) {
     node.append(el('span', { className: 'pill noloc-pill', innerHTML: `${PIN_OFF_SVG}No location`, title: 'No location found for this photo or any photo from the same day' }));
@@ -93,18 +91,19 @@ new ResizeObserver(() => {
 }).observe(document.getElementById('grid'));
 
 async function render() {
-  const records = (await loadSelection()).sort(byDate);
+  const all = await loadSelection();
+  // Photos still loading their details aren't shown (or counted) until they're done,
+  // so each tile appears once, already in its date position.
+  const records = all.filter((r) => r.status !== 'pending').sort(byDate);
   const missing = records.filter((r) => r.status === 'ok' && !hasLocation(r)).length;
   const failed = records.filter((r) => r.status === 'error').length;
-  const pending = records.filter((r) => r.status === 'pending').length;
 
   const count = $('count');
   count.textContent = `${records.length} selected`;
-  if (pending) count.append(` · ${pending} loading`);
   if (missing) count.append(' · ', el('span', { className: 'noloc', textContent: `No location: ${missing}` }));
 
-  $('empty').hidden = records.length > 0;
-  $('clear').disabled = !records.length;
+  $('empty').hidden = all.length > 0;
+  $('clear').disabled = !all.length;
   hasRecords = records.length > 0;
   $('export').disabled = !hasRecords || exportRunning;
   $('retry').hidden = !failed;
@@ -141,14 +140,14 @@ function renderExport(p) {
     box.append(`Export stopped at ${p.done} of ${p.total} (the Google Photos tab was closed or reloaded). Click Export to start again.`);
   } else if (p.error) {
     box.append(el('span', { className: 'warn', textContent: `Export failed: ${p.error}` }));
-  } else {
-    box.append(`Exported ${p.total - failed.length} of ${p.total} photos to `, el('code', { textContent: p.filename }));
   }
+  // A finished export shows no "Exported …" message: only skipped/failed notes, if any.
   if (p.skipped) box.append(el('div', { className: 'muted', textContent: `${p.skipped} skipped: details still loading or failed.` }));
   if (failed.length) {
     const list = el('ul', {}, ...failed.map((f) => el('li', { textContent: `${f.id.slice(0, 16)}…: ${f.error}` })));
     box.append(el('details', {}, el('summary', { className: 'warn', textContent: `${failed.length} failed` }), list));
   }
+  box.hidden = !box.childNodes.length;
 }
 
 // The panel belongs to the tab whose toolbar button opened it (?tab=<id>); export runs

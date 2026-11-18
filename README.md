@@ -17,7 +17,7 @@ World Oyster slideshow (`../world-oyster`).
 - Every photo tile gets a box in its top-right corner. Click to select,
   **Shift+click** to select everything between the last box you clicked and this one.
 - When a single photo is open, the floating panel (bottom-left) has an
-  **Add this photo** button.
+  **Select this photo** button.
 - The selection is saved in `chrome.storage.local` as you go (one `sel:<photoId>`
   key per photo), so you can close the tab and continue later.
 - Clicking the toolbar button opens a side panel on the right, for that tab only:

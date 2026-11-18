@@ -419,9 +419,9 @@
   }
 
   // Status pill shown on selected tiles: loading / no location / error.
+  // While details load (status 'pending') there's no pill: the checkbox shows a spinner instead.
   function statusOf(rec) {
-    if (!rec) return null;
-    if (rec.status === 'pending') return { cls: 'wo-loading', html: '<span class="wo-spin"></span>details…', title: 'Fetching photo details' };
+    if (!rec || rec.status === 'pending') return null;
     if (rec.status === 'error') return { cls: 'wo-error', html: '⚠ no details', title: rec.error || 'Could not fetch photo details' };
     if (!hasLocation(rec)) return { cls: 'wo-noloc', html: `${PIN_OFF_SVG}No location`, title: 'No location found for this photo or any photo from the same day' };
     return null;
@@ -460,14 +460,19 @@
         box = document.createElement('div');
         box.className = 'wo-check';
         box.setAttribute('role', 'checkbox');
-        box.title = 'World Oyster: select for slideshow (Shift+click for a range)';
         tile.appendChild(box);
       }
       // Tiles are recycled while scrolling, so always re-read the id.
       box.dataset.id = id;
       const rec = records.get(id);
-      box.setAttribute('aria-checked', String(!!rec));
-      tile.classList.toggle('wo-selected', !!rec);
+      // Shown as selected only once its details have loaded; until then the box spins.
+      const loading = rec?.status === 'pending';
+      const on = !!rec && !loading;
+      box.setAttribute('aria-checked', String(on));
+      box.classList.toggle('wo-loading-check', loading);
+      box.title = loading ? 'World Oyster: loading photo details… (click to cancel)'
+        : 'World Oyster: select for slideshow (Shift+click for a range)';
+      tile.classList.toggle('wo-selected', on);
       setPill(tile, rec);
     }
   }
@@ -488,10 +493,10 @@
         <span class="wo-this-wrap"><button class="wo-this" type="button"></button></span>`;
       document.documentElement.appendChild(panel);
     }
-    const all = [...records.values()];
-    const missing = all.filter((r) => r.status === 'ok' && !hasLocation(r)).length;
-    const loading = all.filter((r) => r.status === 'pending').length;
-    panel.querySelector('.wo-count').textContent = `🦪 ${all.length} selected${loading ? ` · ${loading} loading` : ''}`;
+    // Count only photos whose details have loaded (the others are still spinning).
+    const loaded = [...records.values()].filter((r) => r.status !== 'pending');
+    const missing = loaded.filter((r) => r.status === 'ok' && !hasLocation(r)).length;
+    panel.querySelector('.wo-count').textContent = `🦪 ${loaded.length} selected`;
     const miss = panel.querySelector('.wo-missing');
     miss.hidden = !missing;
     if (missing && miss.dataset.n !== String(missing)) {
@@ -505,9 +510,11 @@
     wrap.hidden = !id;
     if (id) {
       const rec = records.get(id);
+      const loading = rec?.status === 'pending';
       btn.dataset.id = id;
-      btn.textContent = rec ? '✓ In slideshow' : '+ Add this photo';
-      btn.classList.toggle('wo-on', !!rec);
+      if (loading) btn.innerHTML = '<span class="wo-spin"></span>Selecting…';
+      else btn.textContent = rec ? '✓ Selected' : '+ Select this photo';
+      btn.classList.toggle('wo-on', !!rec && !loading);
       setPill(wrap, rec);
     }
   }
