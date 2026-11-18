@@ -1,0 +1,81 @@
+.wo-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  z-index: 10;
+  box-sizing: border-box;
+  border: 2px solid #fff;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.1s, transform 0.1s;
+}
+.wo-check:hover { opacity: 1; transform: scale(1.08); }
+.wo-check[aria-checked="true"] {
+  opacity: 1;
+  background: #f29900 no-repeat center / 18px
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg>');
+  border-color: #f29900;
+}
+.wo-selected > a { outline: 4px solid #f29900; outline-offset: -4px; }
+
+/* Status pill on selected tiles (and next to the viewer button) */
+.wo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 10px;
+  font: 600 11px/16px system-ui, sans-serif;
+  color: #fff;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+.wo-selected > .wo-pill { position: absolute; left: 8px; bottom: 8px; z-index: 10; }
+.wo-pill svg, .wo-missing svg { width: 13px; height: 13px; flex: none; }
+.wo-noloc { background: #d93025; }
+.wo-error { background: #b06000; }
+.wo-loading { background: rgba(32, 33, 36, 0.8); }
+.wo-spin {
+  width: 9px; height: 9px; margin-right: 2px;
+  border: 2px solid rgba(255, 255, 255, 0.4); border-top-color: #fff; border-radius: 50%;
+  animation: wo-spin 0.8s linear infinite;
+}
+@keyframes wo-spin { to { transform: rotate(360deg); } }
+
+.wo-panel {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 20px;
+  background: #202124;
+  color: #fff;
+  font: 500 13px/1.2 system-ui, sans-serif;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.wo-panel [hidden] { display: none !important; }
+.wo-missing { display: inline-flex; align-items: center; gap: 3px; color: #f28b82; font-weight: 600; }
+.wo-panel button,
+.wo-panel select {
+  font: inherit;
+  color: #fff;
+  background: #3c4043;
+  border: 0;
+  border-radius: 14px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.wo-panel select option { background: #303134; }
+.wo-panel button:hover, .wo-panel select:hover { background: #5f6368; }
+.wo-panel button.wo-on { background: #f29900; }
+.wo-this-wrap { display: inline-flex; align-items: center; gap: 6px; }

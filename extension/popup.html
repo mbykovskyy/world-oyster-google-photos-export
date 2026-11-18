@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>World Oyster</h1>
+      <div id="count" class="muted">0 selected</div>
+    </div>
+    <label class="switch" title="Show selection checkboxes on Google Photos">
+      <input type="checkbox" id="enabled">
+      <span>Picker on</span>
+    </label>
+  </header>
+
+  <div class="actions">
+    <button id="export" type="button" class="primary" title="One zip: photos.csv, photo/, thumbnail/ and icon/ WebP files">Export</button>
+    <button id="retry" type="button" hidden>Retry failed</button>
+    <button id="clear" type="button" class="danger">Clear all</button>
+  </div>
+
+  <p id="export-status" hidden></p>
+  <p id="empty" class="muted">Tick the box in the top-right corner of any photo in Google Photos. Shift+click selects a range. Selections are saved as you go.</p>
+  <ul id="list"></ul>
+  <footer class="muted">Place names: <a href="https://www.geonames.org" target="_blank">GeoNames</a> (CC BY 4.0) · coordinates: <a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap</a></footer>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
