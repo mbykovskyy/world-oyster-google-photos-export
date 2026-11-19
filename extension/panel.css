@@ -30,9 +30,12 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 #export-status code { font-size: 11px; word-break: break-all; }
 #export-status details { margin-top: 4px; }
 #export-status progress { width: 100%; accent-color: var(--accent); }
-#empty { margin: 4px 0; }
+/* Empty selection: the hint fills the space the grid would use, centred both ways. */
+#empty { flex: 1; min-height: 0; margin: 0; padding: 0 24px; display: flex; align-items: center; justify-content: center; text-align: center; }
+#empty[hidden] { display: none; }
+#empty:not([hidden]) ~ #grid { display: none; }
 
-.actions, header, #export-status, #empty, footer { flex: none; }
+.actions, header, #export-status, footer { flex: none; }
 .noloc { color: var(--noloc); font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
 
 /* Masonry grid: columns built by panel.js; only the grid scrolls. */
