@@ -18,15 +18,15 @@ async function tile(r) {
   const node = el('div', { className: 'tile' });
 
   const src = r.preview || thumbUrl(r, 240);
-  const open = () => chrome.tabs.create({ url: accountUrl(r) });
+  const open = () => openViewer(r.id);
   const noPreview = () => {
-    const ph = el('div', { className: 'nopreview', textContent: 'no preview', title: 'Open in Google Photos' });
+    const ph = el('div', { className: 'nopreview', textContent: 'no preview', title: 'Preview' });
     ph.onclick = open;
     return ph;
   };
   let img = null;
   if (src) {
-    img = el('img', { src, alt: '', title: 'Open in Google Photos' });
+    img = el('img', { src, alt: '', title: 'Preview' });
     img.onclick = open;
     img.onerror = () => img.replaceWith(noPreview());
     node.append(img);
@@ -123,7 +123,146 @@ async function render() {
   tiles = built;
   layout(true);
   grid.scrollTop = scroll;
+
+  // The viewer steps through photos in the grid's order (newest first).
+  byId = new Map(records.map((r) => [r.id, r]));
+  viewerIds = records.map((r) => r.id).reverse();
+  if (!$('viewer').hidden) {
+    const i = viewerIds.indexOf(currentId);
+    if (i < 0) closeViewer();
+    else showPhoto(i, false);
+  }
 }
+
+// ---------- photo viewer ----------
+// The panel can't load Google's images itself (no Google cookies here), so the
+// Google Photos tab fetches a larger version and sends it back as a data URL.
+// Nothing is stored: a few recent images are kept in memory only.
+
+let byId = new Map();
+let viewerIds = [];
+let currentId = null;
+let showSeq = 0;
+
+// Longest side to ask Google for: enough for the panel at this screen's pixel density,
+// rounded up to a few fixed sizes so they can be cached and reused.
+const VIEWER_SIZES = [800, 1200, 1600, 2048];
+const viewerSize = () => {
+  const px = Math.max(innerWidth, innerHeight) * (devicePixelRatio || 1);
+  return VIEWER_SIZES.find((s) => s >= px) || VIEWER_SIZES.at(-1);
+};
+
+const largeCache = new Map(); // "<id>@<size>" -> Promise<data URL>, least recently used first
+const LARGE_CACHE_MAX = 12;
+function largeImage(r) {
+  const key = `${r.id}@${viewerSize()}`;
+  let p = largeCache.get(key);
+  if (p) largeCache.delete(key); // re-insert below as most recent
+  else {
+    p = (async () => {
+      const tab = await photosTab();
+      if (!tab) throw new Error('Open Google Photos in this window to see a larger version.');
+      const res = await chrome.tabs.sendMessage(tab.id, { type: 'largeImage', thumb: r.thumb, account: r.account, size: viewerSize() });
+      if (!res?.dataUrl) throw new Error(res?.error || 'No image returned');
+      return res.dataUrl;
+    })();
+    p.catch(() => largeCache.delete(key));
+  }
+  largeCache.set(key, p);
+  while (largeCache.size > LARGE_CACHE_MAX) largeCache.delete(largeCache.keys().next().value);
+  return p;
+}
+
+function openViewer(id) {
+  const i = viewerIds.indexOf(id);
+  if (i < 0) return;
+  $('viewer').hidden = false;
+  $('viewer').focus();
+  showPhoto(i, true);
+}
+
+function closeViewer() {
+  showSeq++;
+  currentId = null;
+  $('viewer').hidden = true;
+  $('v-img').removeAttribute('src');
+}
+
+// fresh = a different photo: reset the image; otherwise just refresh text (after a re-render).
+function showPhoto(i, fresh) {
+  const r = byId.get(viewerIds[i]);
+  if (!r) return closeViewer();
+  currentId = r.id;
+
+  $('v-pos').textContent = `${i + 1} / ${viewerIds.length}`;
+  $('v-prev').disabled = i === 0;
+  $('v-next').disabled = i === viewerIds.length - 1;
+  $('v-open').href = accountUrl(r);
+  $('v-place').replaceChildren();
+  if (r.status === 'error') $('v-place').append(el('span', { className: 'warn', textContent: `⚠ no details: ${r.error || 'could not fetch details'}` }));
+  else if (!hasLocation(r)) $('v-place').append(el('span', { className: 'noloc', innerHTML: `${PIN_OFF_SVG}No location` }));
+  else $('v-place').textContent = r.place || `${r.latitude}, ${r.longitude}`;
+  $('v-date').textContent = [r.date_local?.replace('T', ' '), r.type === 'video' ? 'video' : ''].filter(Boolean).join(' · ');
+  if (!fresh) return;
+
+  const seq = ++showSeq;
+  const img = $('v-img');
+  const msg = $('v-msg');
+  msg.replaceChildren();
+  if (r.preview) img.src = r.preview;
+  else img.removeAttribute('src');
+  img.classList.add('low');
+  $('v-spin').hidden = false;
+
+  largeImage(r)
+    .then((url) => {
+      if (seq !== showSeq) return;
+      img.src = url;
+      img.classList.remove('low');
+    })
+    .catch((e) => {
+      if (seq !== showSeq) return;
+      img.classList.remove('low');
+      msg.textContent = `Couldn't load a larger version: ${e.message}`;
+    })
+    .finally(() => {
+      if (seq !== showSeq) return;
+      $('v-spin').hidden = true;
+      if (r.type === 'video' && !msg.textContent) msg.textContent = 'Video: open in Google Photos to play it.';
+      // Warm up the neighbours so ←/→ feel instant.
+      for (const j of [i + 1, i - 1]) {
+        const n = byId.get(viewerIds[j]);
+        if (n) largeImage(n).catch(() => {});
+      }
+    });
+}
+
+function step(delta) {
+  const i = viewerIds.indexOf(currentId) + delta;
+  if (i >= 0 && i < viewerIds.length) showPhoto(i, true);
+}
+
+// Deselecting closes the viewer (for now).
+function deselectCurrent() {
+  if (!currentId) return;
+  chrome.storage.local.remove(SEL_PREFIX + currentId);
+  closeViewer();
+}
+
+$('v-close').onclick = closeViewer;
+$('v-prev').onclick = () => step(-1);
+$('v-next').onclick = () => step(1);
+$('v-check').onclick = deselectCurrent;
+// Keep focus on the viewer so Space never "clicks" a button that was clicked last.
+for (const b of $('viewer').querySelectorAll('button')) b.onpointerdown = (e) => e.preventDefault();
+
+document.addEventListener('keydown', (e) => {
+  if ($('viewer').hidden || e.altKey || e.ctrlKey || e.metaKey) return;
+  const action = { ArrowLeft: () => step(-1), ArrowRight: () => step(1), ' ': deselectCurrent, Escape: closeViewer }[e.key];
+  if (!action) return;
+  e.preventDefault();
+  action();
+});
 
 // ---------- export (runs in the Google Photos tab, saves one zip) ----------
 
@@ -158,11 +297,12 @@ function renderExport(p) {
   box.hidden = !box.childNodes.length;
 }
 
-// The panel belongs to the tab whose toolbar button opened it (?tab=<id>); export runs
-// there. Falls back to any Google Photos tab in this window if that tab is gone.
+// The panel belongs to the tab whose toolbar button opened it (?tab=<id>); export and
+// the viewer's larger images go through there. Falls back to any Google Photos tab in
+// this window if that tab is gone.
 const ownerTabId = Number(new URLSearchParams(location.search).get('tab')) || null;
 
-async function exportTab() {
+async function photosTab() {
   if (ownerTabId) {
     const tab = await chrome.tabs.get(ownerTabId).catch(() => null);
     if (tab?.url?.startsWith('https://photos.google.com/')) return tab;
@@ -173,7 +313,7 @@ async function exportTab() {
 
 $('export').onclick = async () => {
   try {
-    const tab = await exportTab();
+    const tab = await photosTab();
     if (!tab) throw new Error('no Google Photos tab is open in this window');
     const res = await chrome.tabs.sendMessage(tab.id, { type: 'export' });
     if (res?.error) throw new Error(res.error);

@@ -25,6 +25,28 @@
   <p id="export-status" hidden></p>
   <p id="empty" class="muted">Tick the box in the top-right corner of any photo in Google Photos. Shift+click selects a range. Selections are saved as you go.</p>
   <div id="grid"></div>
+  <!-- Photo viewer: opened by clicking a tile. ←/→ step through the selection,
+       Space or the box deselects (and closes), Esc closes. -->
+  <div id="viewer" role="dialog" aria-label="Photo preview" tabindex="-1" hidden>
+    <div class="v-top">
+      <button id="v-close" class="v-btn" type="button" title="Close (Esc)" aria-label="Close">✕</button>
+      <span id="v-pos"></span>
+      <a id="v-open" href="#" target="_blank" title="Open in Google Photos">Open in Google Photos ↗</a>
+      <button id="v-check" class="check" type="button" role="checkbox" aria-checked="true" title="Selected: untick (Space) to remove"></button>
+    </div>
+    <div class="v-stage">
+      <img id="v-img" alt="">
+      <span id="v-spin" class="v-spin" hidden></span>
+      <button id="v-prev" class="v-nav" type="button" title="Previous (←)" aria-label="Previous">‹</button>
+      <button id="v-next" class="v-nav" type="button" title="Next (→)" aria-label="Next">›</button>
+    </div>
+    <div class="v-info">
+      <div id="v-place"></div>
+      <div id="v-date" class="dim"></div>
+      <div id="v-msg"></div>
+    </div>
+  </div>
+
   <footer class="muted">Place names: <a href="https://www.geonames.org" target="_blank">GeoNames</a> (CC BY 4.0) · coordinates: <a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap</a></footer>
 
   <script type="module" src="panel.js"></script>

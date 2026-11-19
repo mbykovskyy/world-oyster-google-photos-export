@@ -365,7 +365,20 @@
     }
   }
 
+  // Sizes the side panel's photo viewer may ask for (longest side, px).
+  const VIEWER_SIZES = [800, 1200, 1600, 2048];
+  const GOOGLE_IMAGE_RE = /^https:\/\/[\w.-]+\.(googleusercontent\.com|usercontent\.google\.com)\//;
+
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    // Larger image for the side panel's viewer: only this page has the Google cookies.
+    if (msg?.type === 'largeImage') {
+      if (!GOOGLE_IMAGE_RE.test(msg.thumb || '')) return sendResponse({ error: 'No image address saved for this photo' });
+      const size = VIEWER_SIZES.includes(msg.size) ? msg.size : 1600;
+      fetchImage(msg.thumb, msg.account, `s${size}-rw`)
+        .then(blobToDataUrl)
+        .then((dataUrl) => sendResponse({ dataUrl }), (e) => sendResponse({ error: String(e.message || e) }));
+      return true; // responds asynchronously
+    }
     if (msg?.type !== 'export') return;
     if (!loggedIn) return sendResponse({ error: 'Not signed in to Google Photos in this tab' });
     sendResponse({ started: !exporting });

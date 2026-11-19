@@ -54,14 +54,15 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .tile .video { position: absolute; right: 6px; bottom: 4px; color: #fff; font-size: 11px; text-shadow: 0 0 3px #000; pointer-events: none; }
 
 /* Same orange checkbox as the one on Google Photos tiles (content.css .wo-check). */
-.tile .check {
-  position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; padding: 0;
+.tile .check { position: absolute; top: 6px; right: 6px; }
+.check {
+  flex: none; width: 24px; height: 24px; padding: 0;
   box-sizing: border-box; border: 2px solid #fff; border-radius: 6px;
   background: rgba(0, 0, 0, 0.35); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   cursor: pointer; transition: transform 0.1s;
 }
-.tile .check:hover { transform: scale(1.08); }
-.tile .check[aria-checked="true"] {
+.check:hover { transform: scale(1.08); }
+.check[aria-checked="true"] {
   background: #f29900 no-repeat center / 17px
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg>');
   border-color: #f29900;
@@ -78,5 +79,39 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .tile .line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .dim { opacity: 0.8; }
 .warn { color: var(--warn); }
+
+/* Photo viewer: covers the whole panel. */
+#viewer {
+  position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
+  background: rgba(0, 0, 0, 0.94); color: #fff; outline: none;
+}
+#viewer[hidden] { display: none; }
+.v-top { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+#v-pos { flex: 1; font-size: 12px; opacity: 0.8; }
+#v-open { color: #fff; font-size: 12px; opacity: 0.85; white-space: nowrap; }
+.v-btn { background: none; border: 0; color: #fff; font-size: 18px; line-height: 1; padding: 4px 6px; }
+.v-stage { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; }
+#v-img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+#v-img:not([src]), #v-img[src=""] { visibility: hidden; }
+#v-img.low { filter: blur(2px); } /* small preview shown while the larger image loads */
+.v-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 56px; padding: 0;
+  background: rgba(0, 0, 0, 0.45); border: 0; border-radius: 6px; color: #fff; font-size: 30px; line-height: 1;
+}
+#v-prev { left: 6px; }
+#v-next { right: 6px; }
+.v-nav:disabled { visibility: hidden; }
+.v-spin {
+  position: absolute; width: 28px; height: 28px; box-sizing: border-box; border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.3); border-top-color: #f29900; animation: v-spin 0.8s linear infinite;
+}
+.v-spin[hidden] { display: none; }
+@keyframes v-spin { to { transform: rotate(360deg); } }
+.v-info { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 8px 12px 12px; font-size: 12px; }
+.v-info .dim { opacity: 0.75; }
+#viewer .noloc { color: #f28b82; }
+#v-msg { color: #fdd663; }
+#v-msg:empty { display: none; }
+#v-msg a { color: inherit; }
 footer { margin-top: 8px; font-size: 11px; }
 footer a { color: inherit; }
