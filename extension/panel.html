@@ -30,7 +30,6 @@
   <div id="viewer" role="dialog" aria-label="Photo preview" tabindex="-1" hidden>
     <div class="v-top">
       <button id="v-close" class="v-btn" type="button" title="Close (Esc)" aria-label="Close">✕</button>
-      <span id="v-pos"></span>
       <a id="v-open" href="#" target="_blank" title="Open in Google Photos">Open in Google Photos ↗</a>
       <button id="v-check" class="check" type="button" role="checkbox" aria-checked="true" title="Selected: untick (Space) to remove"></button>
     </div>
@@ -41,9 +40,12 @@
       <button id="v-next" class="v-nav" type="button" title="Next (→)" aria-label="Next">›</button>
     </div>
     <div class="v-info">
-      <div id="v-place"></div>
-      <div id="v-date" class="dim"></div>
-      <div id="v-msg"></div>
+      <div class="v-text">
+        <div id="v-place"></div>
+        <div id="v-date" class="dim"></div>
+        <div id="v-msg"></div>
+      </div>
+      <span id="v-pos"></span>
     </div>
   </div>
 
