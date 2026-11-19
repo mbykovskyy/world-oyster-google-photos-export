@@ -242,11 +242,15 @@ function step(delta) {
   if (i >= 0 && i < viewerIds.length) showPhoto(i, true);
 }
 
-// Deselecting closes the viewer (for now).
+// Deselecting moves on to the next photo (the one → shows: older), or the previous one
+// if it was the last; closes the viewer when nothing is left.
 function deselectCurrent() {
   if (!currentId) return;
+  const i = viewerIds.indexOf(currentId);
   chrome.storage.local.remove(SEL_PREFIX + currentId);
-  closeViewer();
+  viewerIds.splice(i, 1); // the storage change re-renders too; update now so the next photo shows at once
+  if (!viewerIds.length) return closeViewer();
+  showPhoto(Math.min(i, viewerIds.length - 1), true);
 }
 
 $('v-close').onclick = closeViewer;
