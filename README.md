@@ -16,6 +16,9 @@ World Oyster slideshow (`../world-oyster`).
   enabled there, after the page shows you're signed in.
 - Every photo tile gets a box in its top-right corner. Click to select,
   **Shift+click** to select everything between the last box you clicked and this one.
+  Only photos can be selected: video tiles get no box. (`page-hook.js` reads the
+  media lists Google Photos loads for its grids, where videos carry extra video
+  info, and a video that slips through is dropped once its details show a video file.)
 - When a single photo is open, the floating panel (bottom-left) has an
   **Select this photo** button.
 - The selection is saved in `chrome.storage.local` as you go (one `sel:<photoId>`
@@ -32,7 +35,7 @@ World Oyster slideshow (`../world-oyster`).
 **Export** in the side panel downloads one zip, `world-oyster-export-YYYY-MM-DD-HHMMSS.zip`:
 
 ```
-photos.csv             sha,url,date_local,content,place,latitude,longitude,location_method,type
+photos.csv             sha,url,date_local,place,latitude,longitude
 photo/<sha>.webp       longest side 2048 px   (Google resize: base + "=s2048-rw")
 thumbnail/<sha>.webp   longest side 400 px    (base + "=s400-rw")
 icon/<sha>.webp        96×96, centre-cropped from the 400 px thumbnail, WebP quality 0.8
@@ -51,10 +54,9 @@ format limits it to 4 GB, about 8,000 photos.
 
 ## CSV columns
 
-`photos.csv` has the same columns as
-`world-oyster/google_photos_landscape_city_people.csv`:
+`photos.csv` columns:
 
-`sha,url,date_local,content,place,latitude,longitude,location_method,type`
+`sha,url,date_local,place,latitude,longitude`
 
 When a photo is selected, the extension stores a record right away and then
 fills in its details with Google Photos' photo-details RPC (`fDcn4b`, called from
@@ -65,10 +67,8 @@ fills in its details with Google Photos' photo-details RPC (`fDcn4b`, called fro
 | `sha` | SHA-256 hex of `https://photos.google.com/photo/<id>` (no `/u/N/`) |
 | `url` | `https://photos.google.com/photo/<id>` |
 | `date_local` | taken-at UTC time + the timezone offset Google stores for the photo |
-| `content` | always blank (no category is determined) |
 | `place` | Google's place name for the photo; if Google has no name, or only a region/country ("California, USA"), the nearest town from GeoNames (offline) |
-| `latitude`/`longitude` | camera GPS → `camera GPS`; otherwise Google's location → `Google estimated`; otherwise Google's place name looked up on OpenStreetMap → `Google Photos recognised the place as "…"; coordinates from OpenStreetMap`; otherwise the location (and place) of the nearest-in-time photo with a location taken the same local day → `estimated from nearest located photo (5 min later)` |
-| `type` | `video` if the file name has a video extension, else `photo` |
+| `latitude`/`longitude` | camera GPS; otherwise Google's location; otherwise Google's place name looked up on OpenStreetMap; otherwise the location (and place) of the nearest-in-time photo with a location taken the same local day |
 
 The same-day photos come from your whole library (Google Photos' `lcxiM`
 library-by-date RPC), not just your selection. Photos with no location even then

@@ -54,7 +54,6 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .tile .pill svg { width: 12px; height: 12px; }
 .tile .noloc-pill { background: #d93025; }
 .tile .error { background: #b06000; }
-.tile .video { position: absolute; right: 6px; bottom: 4px; color: #fff; font-size: 11px; text-shadow: 0 0 3px #000; pointer-events: none; }
 
 /* Same orange checkbox as the one on Google Photos tiles (content.css .wo-check). */
 .tile .check { position: absolute; top: 6px; right: 6px; }
@@ -78,7 +77,6 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
   opacity: 0; pointer-events: none;
 }
 .tile:hover .info, .tile:focus-within .info { opacity: 1; pointer-events: auto; }
-.tile:hover .video, .tile:focus-within .video { opacity: 0; }
 .tile .line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .dim { opacity: 0.8; }
 .warn { color: var(--warn); }

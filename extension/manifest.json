@@ -9,6 +9,12 @@
   "content_scripts": [
     {
       "matches": ["https://photos.google.com/*"],
+      "js": ["page-hook.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://photos.google.com/*"],
       "js": ["page-rpc.js"],
       "world": "MAIN",
       "run_at": "document_idle"

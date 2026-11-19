@@ -43,7 +43,6 @@ async function tile(r) {
   } else if (!hasLocation(r)) {
     node.append(el('span', { className: 'pill noloc-pill', innerHTML: `${PIN_OFF_SVG}No location`, title: 'No location found for this photo or any photo from the same day' }));
   }
-  if (r.type === 'video') node.append(el('span', { className: 'video', textContent: '▶' }));
 
   // Same orange checkbox as on Google Photos tiles; unticking removes the photo.
   const rm = el('button', { className: 'check', type: 'button', role: 'checkbox', title: 'Selected: untick to remove' });
@@ -55,7 +54,7 @@ async function tile(r) {
   };
 
   const place = el('div', { className: 'line', textContent: r.place || (hasLocation(r) ? `${r.latitude}, ${r.longitude}` : '') });
-  if (hasLocation(r)) place.title = `${r.latitude}, ${r.longitude} — ${r.location_method}`;
+  if (hasLocation(r)) place.title = `${r.latitude}, ${r.longitude}`;
   const date = el('div', { className: 'line dim', textContent: r.date_local ? r.date_local.replace('T', ' ') : '' });
   node.append(rm, el('div', { className: 'info' }, place, date));
   return { node, ratio };
@@ -202,7 +201,7 @@ function showPhoto(i, fresh) {
   if (r.status === 'error') $('v-place').append(el('span', { className: 'warn', textContent: `⚠ no details: ${r.error || 'could not fetch details'}` }));
   else if (!hasLocation(r)) $('v-place').append(el('span', { className: 'noloc', innerHTML: `${PIN_OFF_SVG}No location` }));
   else $('v-place').textContent = r.place || `${r.latitude}, ${r.longitude}`;
-  $('v-date').textContent = [r.date_local?.replace('T', ' '), r.type === 'video' ? 'video' : ''].filter(Boolean).join(' · ');
+  $('v-date').textContent = r.date_local?.replace('T', ' ') || '';
   if (!fresh) return;
 
   const seq = ++showSeq;
@@ -228,7 +227,6 @@ function showPhoto(i, fresh) {
     .finally(() => {
       if (seq !== showSeq) return;
       $('v-spin').hidden = true;
-      if (r.type === 'video' && !msg.textContent) msg.textContent = 'Video: open in Google Photos to play it.';
       // Warm up the neighbours so ←/→ feel instant.
       for (const j of [i + 1, i - 1]) {
         const n = byId.get(viewerIds[j]);

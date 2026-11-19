@@ -6,17 +6,16 @@
 //   "geo:<query>"     -> cached OpenStreetMap geocode { lat, lng } or null
 //   "exportProgress"  -> { running, filename, total, done, failed: [{ id, error }], skipped, heartbeat, finishedAt }
 //   "sel:<photoId>"   -> selection record:
-//      { id, account, sha, url, date_local, content, place, latitude, longitude,
-//        location_method, type, thumb, preview, status: 'pending' | 'ok' | 'error', error, addedAt }
+//      { id, account, sha, url, date_local, place, latitude, longitude,
+//        thumb, preview, status: 'pending' | 'ok' | 'error', error, addedAt }
 //      thumb   = Google's base thumbnail URL (only loads with Google cookies)
 //      preview = small WebP data URL made from it on photos.google.com, shown in the side panel (null if it couldn't be made)
 // One key per photo so selections made in different tabs never overwrite each other.
 
 export const SEL_PREFIX = 'sel:';
 
-// Export columns, same as world-oyster/google_photos_landscape_city_people.csv.
-// "content" is kept as a column but left blank (no category is determined).
-export const EXPORT_FIELDS = ['sha', 'url', 'date_local', 'content', 'place', 'latitude', 'longitude', 'location_method', 'type'];
+// Export columns (photos.csv).
+export const EXPORT_FIELDS = ['sha', 'url', 'date_local', 'place', 'latitude', 'longitude'];
 
 export const byDate = (a, b) => (a.date_local || '').localeCompare(b.date_local || '') || a.addedAt - b.addedAt;
 

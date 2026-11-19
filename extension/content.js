@@ -1,6 +1,7 @@
 // Adds a selection checkbox to every Google Photos grid tile and a floating panel,
 // keeps chrome.storage.local in sync with what you tick, and fills in each selected
-// photo's details (date, location, type) from Google Photos' own photo-details RPC.
+// photo's details (date, location) from Google Photos' own photo-details RPC.
+// Only photos can be selected: video tiles get no checkbox.
 (() => {
   const SEL_PREFIX = 'sel:';
   const ID_RE = /photo\/(AF1Qip[\w-]+)/;
@@ -44,23 +45,17 @@
     return best ? best.img.src.replace(/=[whs]\d[^/]*$/, '') : null;
   }
 
-  const typeFromLabel = (label) => (/^video/i.test(label || '') ? 'video' : label ? 'photo' : null);
-
   // New record; details are filled in asynchronously by the details queue.
   function newRecord(id, link) {
-    const label = link?.getAttribute('aria-label');
     return {
       id,
       account: accountIndex(),
       sha: null,
       url: canonicalUrl(id),
       date_local: null,
-      content: null, // not determined: exported blank
       place: null,
       latitude: null,
       longitude: null,
-      location_method: null,
-      type: typeFromLabel(label),
       thumb: link ? thumbFromTile(link) : thumbFromViewer(),
       preview: null,
       status: 'pending',
@@ -75,6 +70,30 @@
     if (location.pathname.startsWith('/about') || location.pathname.startsWith('/login')) return false;
     // Once seen in this page session we stay logged in (the header can be hidden in the photo viewer).
     return loggedIn || !!document.querySelector('a[href*="SignOutOptions"]');
+  }
+
+  // ---------- videos (reported by page-hook.js from Google Photos' own grid data) ----------
+
+  const videoIds = new Set();
+  const photoIds = new Set();
+  window.addEventListener('message', (e) => {
+    if (e.source !== window || e.data?.source !== 'wo-media') return;
+    for (const id of e.data.videos || []) if (typeof id === 'string') videoIds.add(id);
+    for (const id of e.data.photos || []) if (typeof id === 'string') photoIds.add(id);
+    render();
+  });
+  window.postMessage({ source: 'wo-media-req' }, location.origin); // the ones seen before we loaded
+
+  // An item open in the viewer that no grid listed (e.g. opened from a link): check its
+  // file name with the photo-details RPC before offering "Select this photo".
+  const classifying = new Set();
+  function classify(id) {
+    if (classifying.has(id) || !loggedIn) return;
+    classifying.add(id);
+    rpc('fDcn4b', [id, 1, null, null, 1])
+      .then((d) => (VIDEO_EXT.test(d?.[0]?.[2] || '') ? videoIds : photoIds).add(id))
+      .catch(() => photoIds.add(id)) // unknown: allow it; a video is still dropped once its details load
+      .finally(() => { classifying.delete(id); render(); });
   }
 
   // ---------- RPC bridge to page-rpc.js (MAIN world) ----------
@@ -184,11 +203,6 @@
     return dayCache.get(key);
   }
 
-  const gapText = (ms) => {
-    const min = Math.round(ms / 60000);
-    return min < 60 ? `${min} min` : `${(ms / 3600000).toFixed(1)} h`;
-  };
-
   // Nearest-in-time photo with a location, taken the same local day (in the photo's timezone).
   async function locationFromSameDay(id, takenUtc, tz) {
     const localMs = takenUtc + tz;
@@ -212,10 +226,12 @@
     const x = (await rpc('fDcn4b', [rec.id, 1, null, null, 1]))?.[0];
     if (!x) throw new Error('Photo not found in this Google account');
 
+    // A video that got selected anyway (its tile wasn't known to be one): dropped by the caller.
+    if (VIDEO_EXT.test(x[2] || '')) return { video: true };
+
     const out = { sha: await sha256Hex(canonicalUrl(rec.id)) };
     out.preview = await previewFor(rec);
     if (typeof x[3] === 'number') out.date_local = new Date(x[3] + (x[4] || 0)).toISOString().slice(0, 19);
-    out.type = VIDEO_EXT.test(x[2] || '') ? 'video' : rec.type || 'photo';
 
     const gps = x[9]?.[0];
     const google = x[13];
@@ -223,21 +239,15 @@
     const coord = (v) => Math.round(v / 10) / 1e6; // 1e7 fixed point -> 6 decimals
     out.place = place;
     out.latitude = out.longitude = null;
-    out.location_method = null;
 
     if (Array.isArray(gps) && gps[0] != null) {
       [out.latitude, out.longitude] = [coord(gps[0]), coord(gps[1])];
-      out.location_method = 'camera GPS';
     } else if (Array.isArray(google?.[0]) && google[0][0] != null) {
       [out.latitude, out.longitude] = [coord(google[0][0]), coord(google[0][1])];
-      out.location_method = 'Google estimated';
     } else if (place) {
       // Place name but no coordinates: OpenStreetMap (Nominatim).
       const geo = await chrome.runtime.sendMessage({ type: 'placeToCoords', place });
-      if (geo) {
-        [out.latitude, out.longitude] = [geo.lat, geo.lng];
-        out.location_method = `Google Photos recognised the place as "${place}"; coordinates from OpenStreetMap`;
-      }
+      if (geo) [out.latitude, out.longitude] = [geo.lat, geo.lng];
     }
     if (out.latitude == null && typeof x[3] === 'number') {
       // Still nothing: borrow the location of the nearest located photo taken the same day.
@@ -245,7 +255,6 @@
       if (near) {
         [out.latitude, out.longitude] = [coord(near.lat), coord(near.lng)];
         out.place = near.place;
-        out.location_method = `estimated from nearest located photo (${gapText(Math.abs(near.gap))} ${near.gap >= 0 ? 'later' : 'earlier'})`;
       }
     }
     if (out.latitude != null) {
@@ -269,8 +278,12 @@
         .then((details) => ({ ...details, status: 'ok', error: null }))
         .catch((err) => ({ status: 'error', error: String(err.message || err) }))
         .then(async (patch) => {
-          // Merge into the latest stored version, unless it was deselected meanwhile.
           const key = SEL_PREFIX + rec.id;
+          if (patch.video) {
+            videoIds.add(rec.id);
+            return chrome.storage.local.remove(key);
+          }
+          // Merge into the latest stored version, unless it was deselected meanwhile.
           const { [key]: current } = await chrome.storage.local.get(key);
           if (current) await chrome.storage.local.set({ [key]: { ...current, ...patch } });
         })
@@ -452,6 +465,12 @@
       }
       const id = link.getAttribute('href').match(ID_RE)?.[1];
       if (!id) continue;
+      if (videoIds.has(id)) { // photos only
+        box?.remove();
+        tile.querySelector(':scope > .wo-pill')?.remove();
+        tile.classList.remove('wo-selected');
+        continue;
+      }
       if (!box) {
         box = document.createElement('div');
         box.className = 'wo-check';
@@ -503,8 +522,11 @@
     const id = viewerPhotoId();
     const wrap = panel.querySelector('.wo-this-wrap');
     const btn = panel.querySelector('.wo-this');
-    wrap.hidden = !id;
-    if (id) {
+    // Photos only: the button appears once the open item is known to be a photo.
+    const isPhoto = !!id && (photoIds.has(id) || records.has(id)) && !videoIds.has(id);
+    if (id && !isPhoto && !videoIds.has(id)) classify(id);
+    wrap.hidden = !isPhoto;
+    if (isPhoto) {
       const rec = records.get(id);
       const loading = rec?.status === 'pending';
       btn.dataset.id = id;
@@ -549,8 +571,8 @@
 
     const ids = links.map((a) => a.getAttribute('href').match(ID_RE)[1]);
     if (turnOn) {
-      // Keep existing records (and their content choice) for photos already selected.
-      select(links.filter((a, i) => !records.has(ids[i])).map((a) => newRecord(a.getAttribute('href').match(ID_RE)[1], a)));
+      // Keep existing records for photos already selected; skip videos in a Shift range.
+      select(links.filter((a, i) => !records.has(ids[i]) && !videoIds.has(ids[i])).map((a) => newRecord(a.getAttribute('href').match(ID_RE)[1], a)));
     } else {
       deselect(ids);
     }
