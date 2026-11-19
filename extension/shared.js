@@ -9,7 +9,7 @@
 //      { id, account, sha, url, date_local, content, place, latitude, longitude,
 //        location_method, type, thumb, preview, status: 'pending' | 'ok' | 'error', error, addedAt }
 //      thumb   = Google's base thumbnail URL (only loads with Google cookies)
-//      preview = small WebP data URL made from it on photos.google.com, shown in the side panel
+//      preview = small WebP data URL made from it on photos.google.com, shown in the side panel (null if it couldn't be made)
 // One key per photo so selections made in different tabs never overwrite each other.
 
 export const SEL_PREFIX = 'sel:';

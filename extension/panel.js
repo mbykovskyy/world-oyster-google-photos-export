@@ -9,14 +9,13 @@ const el = (tag, props = {}, ...children) => {
   return node;
 };
 
-// Height/width of a photo's tile: from the preview's or photo's size; square until known.
-const tileRatio = (r) => (r.width && r.height ? Math.min(3, Math.max(0.33, r.height / r.width)) : 1);
+// Height/width of a tile, from its decoded preview image; square without one.
+const imageRatio = (img) => (img?.naturalWidth ? Math.min(3, Math.max(0.33, img.naturalHeight / img.naturalWidth)) : 1);
 
 // One masonry tile: the image at its own shape, a status label (always visible), and
-// date / place / content on hover.
-function tile(r) {
+// place / date on hover. Resolves once the image is decoded, so its shape is known.
+async function tile(r) {
   const node = el('div', { className: 'tile' });
-  node.style.aspectRatio = `1 / ${tileRatio(r)}`;
 
   const src = r.preview || thumbUrl(r, 240);
   const open = () => chrome.tabs.create({ url: accountUrl(r) });
@@ -25,14 +24,18 @@ function tile(r) {
     ph.onclick = open;
     return ph;
   };
+  let img = null;
   if (src) {
-    const img = el('img', { src, loading: 'lazy', alt: '', title: 'Open in Google Photos' });
+    img = el('img', { src, alt: '', title: 'Open in Google Photos' });
     img.onclick = open;
     img.onerror = () => img.replaceWith(noPreview());
     node.append(img);
+    await img.decode().catch(() => { img = null; });
   } else {
     node.append(noPreview());
   }
+  const ratio = imageRatio(img);
+  node.style.aspectRatio = `1 / ${ratio}`;
 
   // Status label, top-left: failed / No location. (Loading photos aren't shown at all.)
   if (r.status === 'error') {
@@ -55,7 +58,7 @@ function tile(r) {
   if (hasLocation(r)) place.title = `${r.latitude}, ${r.longitude} — ${r.location_method}`;
   const date = el('div', { className: 'line dim', textContent: r.date_local ? r.date_local.replace('T', ' ') : '' });
   node.append(rm, el('div', { className: 'info' }, place, date));
-  return { node, ratio: tileRatio(r) };
+  return { node, ratio };
 }
 
 // ---------- masonry layout ----------
@@ -90,7 +93,9 @@ new ResizeObserver(() => {
   layoutFrame = requestAnimationFrame(() => layout());
 }).observe(document.getElementById('grid'));
 
+let renderSeq = 0;
 async function render() {
+  const seq = ++renderSeq;
   const all = await loadSelection();
   // Photos still loading their details aren't shown (or counted) until they're done,
   // so each tile appears once, already in its date position.
@@ -109,10 +114,13 @@ async function render() {
   $('retry').hidden = !failed;
   $('retry').textContent = `Retry ${failed} failed`;
 
+  const built = await Promise.all(records.slice().reverse().map(tile));
+  if (seq !== renderSeq) return; // a newer render started while images decoded
+
   // Keep the scroll position across re-renders.
   const grid = $('grid');
   const scroll = grid.scrollTop;
-  tiles = records.slice().reverse().map(tile);
+  tiles = built;
   layout(true);
   grid.scrollTop = scroll;
 }

@@ -62,6 +62,7 @@
       location_method: null,
       type: typeFromLabel(label),
       thumb: link ? thumbFromTile(link) : thumbFromViewer(),
+      preview: null,
       status: 'pending',
       error: null,
       addedAt: Date.now(),
@@ -135,20 +136,13 @@
   };
 
   // Uncropped (longest side 240 px) so the side panel's masonry tiles keep each photo's shape.
-  const PREVIEW_VERSION = 2; // 1 = old 104 px square crops
   async function makePreview(thumb, account) {
     const blob = await fetchImage(thumb, account, 's240');
-    const bitmap = await createImageBitmap(blob);
-    const size = { width: bitmap.width, height: bitmap.height };
-    bitmap.close();
-    return { preview: await blobToDataUrl(await encodeWebp(blob, 0, 0, 0.7)), previewVersion: PREVIEW_VERSION, ...size };
+    return blobToDataUrl(await encodeWebp(blob, 0, 0, 0.7));
   }
 
-  // Resolves to fields to merge into the record. preview null = tried and failed (not retried).
-  const previewFor = (rec) => (rec.thumb
-    ? makePreview(rec.thumb, rec.account).catch(() => ({ preview: null, previewVersion: PREVIEW_VERSION }))
-    : Promise.resolve({ preview: null, previewVersion: PREVIEW_VERSION }));
-  const needsPreview = (rec) => rec.previewVersion !== PREVIEW_VERSION;
+  // The preview data URL, or null if it couldn't be made (the side panel shows "no preview").
+  const previewFor = (rec) => (rec.thumb ? makePreview(rec.thumb, rec.account).catch(() => null) : Promise.resolve(null));
 
   // ---------- photo details ----------
 
@@ -219,9 +213,7 @@
     if (!x) throw new Error('Photo not found in this Google account');
 
     const out = { sha: await sha256Hex(canonicalUrl(rec.id)) };
-    // Photo dimensions (x[6] × x[7]) give tiles their shape even before a preview exists.
-    if (x[6] && x[7]) Object.assign(out, { width: x[6], height: x[7] });
-    if (needsPreview(rec)) Object.assign(out, await previewFor(rec));
+    out.preview = await previewFor(rec);
     if (typeof x[3] === 'number') out.date_local = new Date(x[3] + (x[4] || 0)).toISOString().slice(0, 19);
     out.type = VIDEO_EXT.test(x[2] || '') ? 'video' : rec.type || 'photo';
 
@@ -249,7 +241,6 @@
     }
     if (out.latitude == null && typeof x[3] === 'number') {
       // Still nothing: borrow the location of the nearest located photo taken the same day.
-      out.sameDayChecked = true;
       const near = await locationFromSameDay(rec.id, x[3], x[4] || 0);
       if (near) {
         [out.latitude, out.longitude] = [coord(near.lat), coord(near.lng)];
@@ -264,27 +255,19 @@
     return out;
   }
 
-  // Fill in details for pending records of the account this tab is signed into,
-  // and previews for records saved before previews existed.
+  // Fill in details for pending records of the account this tab is signed into.
   const inFlight = new Set();
   const MAX_PARALLEL = 3;
-  const needsPreviewOnly = (rec) => rec.status === 'ok' && !!rec.thumb && needsPreview(rec);
   function pumpDetails() {
     if (!loggedIn) return;
     const account = accountIndex();
     for (const rec of records.values()) {
       if (inFlight.size >= MAX_PARALLEL) break;
-      if (rec.account !== account || inFlight.has(rec.id)) continue;
-      let work;
-      if (rec.status === 'pending') {
-        work = fetchDetails(rec)
-          .then((details) => ({ ...details, status: 'ok', error: null }))
-          .catch((err) => ({ status: 'error', error: String(err.message || err) }));
-      } else if (needsPreviewOnly(rec)) {
-        work = previewFor(rec);
-      } else continue;
+      if (rec.status !== 'pending' || rec.account !== account || inFlight.has(rec.id)) continue;
       inFlight.add(rec.id);
-      work
+      fetchDetails(rec)
+        .then((details) => ({ ...details, status: 'ok', error: null }))
+        .catch((err) => ({ status: 'error', error: String(err.message || err) }))
         .then(async (patch) => {
           // Merge into the latest stored version, unless it was deselected meanwhile.
           const key = SEL_PREFIX + rec.id;
@@ -592,42 +575,10 @@
   });
   setInterval(tick, 1500); // catches SPA navigations that don't mutate watched nodes
 
-  chrome.storage.local.get(null).then(async (all) => {
+  chrome.storage.local.get(null).then((all) => {
     enabled = all.enabled !== false;
-    const upgrade = {};
-    for (const [key, rec] of Object.entries(all)) {
-      if (!key.startsWith(SEL_PREFIX)) continue;
-      let next = rec;
-      // Records from v0.1 had no details: queue them.
-      if (!rec.status) next = { ...next, url: canonicalUrl(rec.id), status: 'pending' };
-      // Located-less records from before the same-day rule: fetch again once.
-      else if (rec.status === 'ok' && rec.latitude == null && !rec.sameDayChecked) next = { ...next, status: 'pending' };
-      // The content category is no longer chosen by hand: export it blank.
-      if (next.content) next = { ...next, content: null };
-      if (next !== rec) upgrade[key] = next;
-      records.set(rec.id, next);
-    }
-    if ('contentDefault' in all) await chrome.storage.local.remove('contentDefault');
-    if (Object.keys(upgrade).length) await chrome.storage.local.set(upgrade);
+    for (const [key, rec] of Object.entries(all)) if (key.startsWith(SEL_PREFIX)) records.set(rec.id, rec);
     tick();
     pumpDetails();
-    fixPlaces();
   });
-
-  // Records saved before the current place rules: re-label region/country-only names
-  // ("United States", "California, USA") and drop the old "Near " prefix, using GeoNames.
-  async function fixPlaces() {
-    for (const rec of [...records.values()]) {
-      if (rec.status !== 'ok' || rec.latitude == null) continue;
-      const near = rec.place?.startsWith('Near ');
-      if (rec.place && !near && rec.place.split(',').length > 2) continue; // "Town, Region, Country" is fine
-      const place = await chrome.runtime.sendMessage({
-        type: 'placeFor', lat: rec.latitude, lng: rec.longitude, googlePlace: near ? null : rec.place,
-      });
-      if (!place || place === rec.place) continue;
-      const key = SEL_PREFIX + rec.id;
-      const { [key]: current } = await chrome.storage.local.get(key);
-      if (current?.place === rec.place) await chrome.storage.local.set({ [key]: { ...current, place } });
-    }
-  }
 })();
