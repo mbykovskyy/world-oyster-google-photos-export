@@ -21,16 +21,21 @@
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg>');
   border-color: #f29900;
 }
-/* Details loading: a spinner in place of the tick, until the photo is shown as selected. */
+/* Details loading: the box is hidden and a spinner the box's size takes its place,
+   until the photo is shown as selected. */
 .wo-check.wo-loading-check {
   opacity: 1;
-  background: rgba(0, 0, 0, 0.55);
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
 }
 .wo-check.wo-loading-check::after {
   content: "";
   position: absolute;
-  inset: 4px;
-  border: 2.5px solid rgba(255, 255, 255, 0.35);
+  inset: -2px; /* over the (hidden) border too: same outer size as the box */
+  box-sizing: border-box;
+  border: 3px solid rgba(255, 255, 255, 0.45);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)); /* visible on light photos */
   border-top-color: #f29900;
   border-radius: 50%;
   animation: wo-spin 0.8s linear infinite;
