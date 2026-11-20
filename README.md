@@ -1,7 +1,7 @@
 # World Oyster – Google Photos picker
 
 Chrome extension (Manifest V3) for picking photos in Google Photos to use in the
-World Oyster slideshow (`../world-oyster`).
+World Oyster slideshow.
 
 ## Install (unpacked)
 
@@ -18,9 +18,6 @@ World Oyster slideshow (`../world-oyster`).
   badge. Click it to add the photo (an orange ring spins around the logo while its
   details load, then the badge turns into an orange tick; click again to remove).
   **Shift+click** adds everything between the last tile you clicked and this one.
-  Only photos can be selected: video tiles get no logo. (`page-hook.js` reads the
-  media lists Google Photos loads for its grids, where videos carry extra video
-  info, and a video that slips through is dropped once its details show a video file.)
 - When a single photo is open, the World Oyster logo sits in Google's viewer
   toolbar, left of Share / Zoom / Info, with a small "+" badge: click it to add the
   photo. An orange ring spins around the logo while it's being added, and the badge
@@ -45,12 +42,6 @@ photo/<sha>.webp       longest side 2048 px   (Google resize: base + "=s2048-rw"
 thumbnail/<sha>.webp   longest side 400 px    (base + "=s400-rw")
 icon/<sha>.webp        96×96, centre-cropped from the 400 px thumbnail, WebP quality 0.8
 ```
-
-The folders match `world-oyster/travel_photos/{photo,thumbnail,icon}/`. The
-progress bar moves one step per photo (all three sizes), then the zip is put
-together and downloaded. Google doesn't upscale, so a photo smaller than 2048 px
-keeps its own size. Photos whose details are still loading (or failed) are
-skipped, and `photos.csv` lists only the photos in the zip.
 
 The export runs inside the Google Photos tab, because only pages on
 photos.google.com can fetch Google's images. Keep that tab open until the zip
@@ -85,8 +76,8 @@ floating bar and in the side panel, and their location fields are left empty in 
 - **Place name → coordinates: [Nominatim](https://nominatim.org) (OpenStreetMap).**
   Free, no key, at most one request a second. Requests are queued, spaced 1.1 s
   apart and cached. It tries the full name, then its first and last parts
-  ("Karantar, Manakamana, Gandaki Province, Nepal" → "Karantar, Nepal"), like
-  `world-oyster/apply_admin.py`. Coordinates are rounded to 5 decimals.
+  ("Karantar, Manakamana, Gandaki Province, Nepal" → "Karantar, Nepal").
+  Coordinates are rounded to 5 decimals.
 - **Coordinates → place name: [GeoNames](https://www.geonames.org), offline.**
   `extension/data/places.tsv` lists every town of 1,000+ people (cities1000) with
   labels formatted like world-oyster's place names: "Town, ST, United States" in the US,
