@@ -17,7 +17,15 @@ World Oyster slideshow.
 - Every photo tile gets the World Oyster logo in its top-right corner, with a "+"
   badge. Click it to add the photo (an orange ring spins around the logo while its
   details load, then the badge turns into an orange tick; click again to remove).
-  **Shift+click** adds everything between the last tile you clicked and this one.
+  **Shift+click** adds (or removes) every photo between the last tile you clicked and
+  this one, in the order the current view shows them (library, album or search
+  results), even if the first one has scrolled far away, as long as Google has loaded
+  the photos in between. Like Google's own Shift+click, a range across a part you
+  scrolled past too fast (so Google never loaded it) falls back to just the clicked photo.
+- Only photos can be selected: video tiles get no logo, and a range skips videos.
+  (`page-hook.js` reads the lists Google Photos loads for its grids, where videos carry
+  extra video info; a video that slips through is dropped once its details show a
+  video file.)
 - When a single photo is open, the World Oyster logo sits in Google's viewer
   toolbar, left of Share / Zoom / Info, with a small "+" badge: click it to add the
   photo. An orange ring spins around the logo while it's being added, and the badge

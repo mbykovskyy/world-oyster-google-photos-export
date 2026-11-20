@@ -7,6 +7,8 @@
   const ID_RE = /photo\/(AF1Qip[\w-]+)/;
   const TILE_LINK = 'a[href*="photo/AF1Qip"]';
   const OYSTER_URL = chrome.runtime.getURL('icons/world-oyster.svg');
+  // Google's image hosts (thumbnails); only these are ever fetched with the user's cookies.
+  const GOOGLE_IMAGE_RE = /^https:\/\/[\w.-]+\.(googleusercontent\.com|usercontent\.google\.com)\//;
   const VIDEO_EXT = /\.(mp4|mov|m4v|3gp|avi|mkv|webm|mts|m2ts|wmv)$/i;
   const PIN_OFF_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/><path d="M3.5 3.5l17 17" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
 
@@ -57,7 +59,8 @@
       place: null,
       latitude: null,
       longitude: null,
-      thumb: link ? thumbFromTile(link) : thumbFromViewer(),
+      // From Google's grid data; else from its tile; else from the viewer, if it's the photo open there.
+      thumb: itemThumb(id) || (link && thumbFromTile(link)) || (id === viewerPhotoId() ? thumbFromViewer() : null),
       preview: null,
       status: 'pending',
       error: null,
@@ -73,17 +76,80 @@
     return loggedIn || !!document.querySelector('a[href*="SignOutOptions"]');
   }
 
-  // ---------- videos (reported by page-hook.js from Google Photos' own grid data) ----------
+  // ---------- media lists (forwarded by page-hook.js from Google Photos' own grid data) ----------
+  // items: facts about every item seen in any view: photo or video, thumbnail, taken time.
+  // lists: each view's order (library, an album, a search…), for Shift+click ranges.
+  // Both are bounded: the least recently seen items / least recently used lists go first.
 
-  const videoIds = new Set();
-  const photoIds = new Set();
+  const ITEM_CAP = 50000;
+  const LIST_CAP = 50000; // IDs across all lists
+  const items = new Map(); // id -> { video, thumb, ts }; Map order = least recently seen first
+  const lists = new Map(); // key -> { ids: [], pos: Map(id -> index), ts: Map | null, used, dirty }
+  let listTotal = 0;
+
+  const isVideo = (id) => items.get(id)?.video === true;
+  const isKnownPhoto = (id) => items.get(id)?.video === false;
+  const itemThumb = (id) => items.get(id)?.thumb?.replace(/=[whs]\d[^/]*$/, '') || null;
+
+  function rememberItem(id, video, thumb = null, ts = null) {
+    const old = items.get(id);
+    items.delete(id);
+    // Once a video, always a video: not every source carries the video marker.
+    items.set(id, { video: video || !!old?.video, thumb: thumb || old?.thumb || null, ts: ts ?? old?.ts ?? null });
+    if (items.size > ITEM_CAP) items.delete(items.keys().next().value);
+  }
+
+  function addToList(key, batch) {
+    let list = lists.get(key);
+    // The library is shown newest first by taken time, and its batches can arrive in any
+    // order (scrolling up loads newer ones), so it's kept sorted by time; other lists keep
+    // the order Google lists them in.
+    if (!list) lists.set(key, (list = { ids: [], pos: new Map(), ts: key === 'library' ? new Map() : null, used: 0, dirty: false }));
+    list.used = Date.now();
+    for (const [id, , , ts] of batch) {
+      if (list.ts) list.ts.set(id, ts ?? 0);
+      if (list.pos.has(id)) continue;
+      list.pos.set(id, list.ids.length);
+      list.ids.push(id);
+      listTotal++;
+    }
+    if (list.ts) list.dirty = true;
+    while (listTotal > LIST_CAP) {
+      let drop = null;
+      for (const [k, l] of lists) if (k !== key && (!drop || l.used < drop.used)) drop = l;
+      if (drop) {
+        listTotal -= drop.ids.length;
+        lists.delete([...lists].find(([, l]) => l === drop)[0]);
+      } else {
+        // One huge list: drop its first tenth (the far end from where the user has scrolled to).
+        sortedList(list);
+        const gone = list.ids.splice(0, Math.ceil(list.ids.length / 10));
+        for (const id of gone) list.ts?.delete(id);
+        listTotal -= gone.length;
+        list.pos = new Map(list.ids.map((id, n) => [id, n]));
+      }
+    }
+  }
+
+  function sortedList(list) {
+    if (list.dirty) {
+      list.ids.sort((a, b) => list.ts.get(b) - list.ts.get(a));
+      list.pos = new Map(list.ids.map((id, n) => [id, n]));
+      list.dirty = false;
+    }
+    return list;
+  }
+
   window.addEventListener('message', (e) => {
-    if (e.source !== window || e.data?.source !== 'wo-media') return;
-    for (const id of e.data.videos || []) if (typeof id === 'string') videoIds.add(id);
-    for (const id of e.data.photos || []) if (typeof id === 'string') photoIds.add(id);
+    if (e.source !== window || e.data?.source !== 'wo-media' || typeof e.data.key !== 'string' || !Array.isArray(e.data.items)) return;
+    const batch = e.data.items.filter((x) => Array.isArray(x) && typeof x[0] === 'string' && x[0].startsWith('AF1Qip'));
+    for (const [id, video, thumb, ts] of batch) {
+      rememberItem(id, video === true, GOOGLE_IMAGE_RE.test(thumb || '') ? thumb : null, typeof ts === 'number' ? ts : null);
+    }
+    addToList(e.data.key, batch);
     render();
   });
-  window.postMessage({ source: 'wo-media-req' }, location.origin); // the ones seen before we loaded
+  window.postMessage({ source: 'wo-media-req' }, location.origin); // batches seen before we loaded
 
   // An item open in the viewer that no grid listed (e.g. opened from a link): check its
   // file name with the photo-details RPC before offering "Add to World Oyster".
@@ -92,8 +158,8 @@
     if (classifying.has(id) || !loggedIn) return;
     classifying.add(id);
     rpc('fDcn4b', [id, 1, null, null, 1])
-      .then((d) => (VIDEO_EXT.test(d?.[0]?.[2] || '') ? videoIds : photoIds).add(id))
-      .catch(() => photoIds.add(id)) // unknown: allow it; a video is still dropped once its details load
+      .then((d) => rememberItem(id, VIDEO_EXT.test(d?.[0]?.[2] || '')))
+      .catch(() => rememberItem(id, false)) // unknown: allow it; a video is still dropped once its details load
       .finally(() => { classifying.delete(id); render(); });
   }
 
@@ -281,7 +347,7 @@
         .then(async (patch) => {
           const key = SEL_PREFIX + rec.id;
           if (patch.video) {
-            videoIds.add(rec.id);
+            rememberItem(rec.id, true);
             return chrome.storage.local.remove(key);
           }
           // Merge into the latest stored version, unless it was deselected meanwhile.
@@ -381,7 +447,6 @@
 
   // Sizes the side panel's photo viewer may ask for (longest side, px).
   const VIEWER_SIZES = [800, 1200, 1600, 2048];
-  const GOOGLE_IMAGE_RE = /^https:\/\/[\w.-]+\.(googleusercontent\.com|usercontent\.google\.com)\//;
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // Larger image for the side panel's viewer: only this page has the Google cookies.
@@ -423,10 +488,6 @@
   });
 
   // ---------- UI ----------
-
-  function visibleTileLinks() {
-    return [...document.querySelectorAll(TILE_LINK)].filter((a) => a.offsetWidth >= 40 && ID_RE.test(a.getAttribute('href')));
-  }
 
   // Status pill shown on selected tiles: loading / no location / error.
   // While details load (status 'pending') there's no pill: the checkbox shows a spinner instead.
@@ -493,7 +554,7 @@
       }
       const id = link.getAttribute('href').match(ID_RE)?.[1];
       if (!id) continue;
-      if (videoIds.has(id)) { // photos only
+      if (isVideo(id)) { // photos only
         box?.remove();
         tile.querySelector(':scope > .wo-pill')?.remove();
         tile.classList.remove('wo-selected');
@@ -570,8 +631,8 @@
 
     const id = viewerPhotoId();
     // Photos only: the button appears once the open item is known to be a photo.
-    const isPhoto = !!id && (photoIds.has(id) || records.has(id)) && !videoIds.has(id);
-    if (id && !isPhoto && !videoIds.has(id)) classify(id);
+    const isPhoto = !!id && (isKnownPhoto(id) || records.has(id)) && !isVideo(id);
+    if (id && !isPhoto && !isVideo(id)) classify(id);
     if (isPhoto) {
       const home = viewerToolbarGroup() || panel;
       if (addWrap.parentElement !== home) home.prepend(addWrap);
@@ -602,28 +663,39 @@
 
   // ---------- events ----------
 
+  // Lists that hold both photos, the current view's own list first, then the most recently used.
+  function candidateLists(a, b) {
+    const p = location.pathname.replace(/^\/u\/\d+/, '');
+    const album = p.match(/^\/(?:share|album)\/(AF1Qip[\w-]+)/)?.[1];
+    const score = (key) => ((p === '' || p === '/') && key === 'library') || (album && key === `album:${album}`) ? 2
+      : p.startsWith('/search/') && key.startsWith('search:') ? 1 : 0;
+    return [...lists].filter(([, l]) => l.pos.has(a) && l.pos.has(b))
+      .sort(([k1, l1], [k2, l2]) => score(k2) - score(k1) || l2.used - l1.used)
+      .map(([, l]) => l);
+  }
+
+  // Photo IDs from one clicked photo to another, in the order Google's backend listed the
+  // view (library by taken time, an album or a search in its own order). Either direction,
+  // so a view shown in reverse list order works too. Like Google's own Shift+click, only
+  // photos Google has loaded count: if either end isn't in a loaded list, no range.
+  function rangeIds(a, b) {
+    const list = candidateLists(a, b)[0];
+    if (!list) return null;
+    if (list.ts) sortedList(list);
+    list.used = Date.now();
+    const p = list.pos.get(a), q = list.pos.get(b);
+    return list.ids.slice(Math.min(p, q), Math.max(p, q) + 1);
+  }
+
   function onTileCheck(box, shiftKey) {
     const id = box.dataset.id;
     const turnOn = !records.has(id);
-    let links = [];
-
-    if (shiftKey && lastClickedId && lastClickedId !== id) {
-      // Range in visual order among tiles currently rendered.
-      const ordered = visibleTileLinks().sort((a, b) => {
-        const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-        return ra.top - rb.top || ra.left - rb.left;
-      });
-      const ids = ordered.map((a) => a.getAttribute('href').match(ID_RE)[1]);
-      const i = ids.indexOf(lastClickedId), j = ids.indexOf(id);
-      if (i !== -1 && j !== -1) links = ordered.slice(Math.min(i, j), Math.max(i, j) + 1);
-    }
-    if (!links.length) links = [box.parentElement.querySelector(':scope > a')];
+    const ids = (shiftKey && lastClickedId && lastClickedId !== id && rangeIds(lastClickedId, id)) || [id];
     lastClickedId = id;
-
-    const ids = links.map((a) => a.getAttribute('href').match(ID_RE)[1]);
     if (turnOn) {
-      // Keep existing records for photos already selected; skip videos in a Shift range.
-      select(links.filter((a, i) => !records.has(ids[i]) && !videoIds.has(ids[i])).map((a) => newRecord(a.getAttribute('href').match(ID_RE)[1], a)));
+      // Keep existing records for photos already selected; skip videos in a range.
+      const link = box.parentElement.querySelector(':scope > a');
+      select(ids.filter((x) => !records.has(x) && !isVideo(x)).map((x) => newRecord(x, x === id ? link : null)));
     } else {
       deselect(ids);
     }
