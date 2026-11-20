@@ -1,6 +1,8 @@
 import { SEL_PREFIX, loadSelection, hasLocation, thumbUrl, accountUrl, byDate } from './shared.js';
 
 const $ = (id) => document.getElementById(id);
+// Trash bin (Material "delete" outline), for removing a photo from the selection.
+const TRASH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z"/></svg>';
 const PIN_OFF_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/><path d="M3.5 3.5l17 17" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
 
 const el = (tag, props = {}, ...children) => {
@@ -15,19 +17,15 @@ const imageRatio = (img) => (img?.naturalWidth ? Math.min(3, Math.max(0.33, img.
 // One masonry tile: the image at its own shape, a status label (always visible), and
 // place / date on hover. Resolves once the image is decoded, so its shape is known.
 async function tile(r) {
-  const node = el('div', { className: 'tile' });
+  // The whole tile opens the preview (the trash bin is the only other click target).
+  const node = el('div', { className: 'tile', title: 'Preview' });
+  node.onclick = () => openViewer(r.id);
 
   const src = r.preview || thumbUrl(r, 240);
-  const open = () => openViewer(r.id);
-  const noPreview = () => {
-    const ph = el('div', { className: 'nopreview', textContent: 'no preview', title: 'Preview' });
-    ph.onclick = open;
-    return ph;
-  };
+  const noPreview = () => el('div', { className: 'nopreview', textContent: 'no preview' });
   let img = null;
   if (src) {
-    img = el('img', { src, alt: '', title: 'Preview' });
-    img.onclick = open;
+    img = el('img', { src, alt: '' });
     img.onerror = () => img.replaceWith(noPreview());
     node.append(img);
     await img.decode().catch(() => { img = null; });
@@ -44,17 +42,16 @@ async function tile(r) {
     node.append(el('span', { className: 'pill noloc-pill', innerHTML: `${PIN_OFF_SVG}No location`, title: 'No location found for this photo or any photo from the same day' }));
   }
 
-  // Same orange checkbox as on Google Photos tiles; unticking removes the photo.
-  const rm = el('button', { className: 'check', type: 'button', role: 'checkbox', title: 'Selected: untick to remove' });
-  rm.setAttribute('aria-checked', 'true');
-  rm.onclick = () => {
-    rm.setAttribute('aria-checked', 'false');
+  // Trash bin: removes the photo from the selection.
+  const rm = el('button', { className: 'trash', type: 'button', title: 'Remove', innerHTML: TRASH_SVG });
+  rm.setAttribute('aria-label', 'Remove');
+  rm.onclick = (e) => {
+    e.stopPropagation(); // don't also open the preview
     node.remove(); // update the grid right away; the storage change re-renders the rest
     chrome.storage.local.remove(SEL_PREFIX + r.id);
   };
 
   const place = el('div', { className: 'line', textContent: r.place || (hasLocation(r) ? `${r.latitude}, ${r.longitude}` : '') });
-  if (hasLocation(r)) place.title = `${r.latitude}, ${r.longitude}`;
   const date = el('div', { className: 'line dim', textContent: r.date_local ? r.date_local.replace('T', ' ') : '' });
   node.append(rm, el('div', { className: 'info' }, place, date));
   return { node, ratio };
@@ -254,13 +251,14 @@ function deselectCurrent() {
 $('v-close').onclick = closeViewer;
 $('v-prev').onclick = () => step(-1);
 $('v-next').onclick = () => step(1);
-$('v-check').onclick = deselectCurrent;
-// Keep focus on the viewer so Space never "clicks" a button that was clicked last.
+$('v-remove').innerHTML = TRASH_SVG;
+$('v-remove').onclick = deselectCurrent;
+// Keep focus on the viewer, not on the last button clicked (so keys don't "click" it).
 for (const b of $('viewer').querySelectorAll('button')) b.onpointerdown = (e) => e.preventDefault();
 
 document.addEventListener('keydown', (e) => {
   if ($('viewer').hidden || e.altKey || e.ctrlKey || e.metaKey) return;
-  const action = { ArrowLeft: () => step(-1), ArrowRight: () => step(1), ' ': deselectCurrent, Escape: closeViewer }[e.key];
+  const action = { ArrowLeft: () => step(-1), ArrowRight: () => step(1), d: deselectCurrent, D: deselectCurrent, Escape: closeViewer }[e.key];
   if (!action) return;
   e.preventDefault();
   action();

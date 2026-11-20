@@ -42,9 +42,9 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 /* scrollbar-gutter: the scrollbar appearing must not change the grid's width (and column count). */
 #grid { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; display: flex; gap: 6px; align-items: flex-start; }
 #grid .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.tile { position: relative; border-radius: 6px; overflow: hidden; background: var(--btn); }
-.tile img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
-.tile .nopreview { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 10px; color: var(--muted); cursor: pointer; }
+.tile { position: relative; border-radius: 6px; overflow: hidden; background: var(--btn); cursor: pointer; }
+.tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tile .nopreview { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 10px; color: var(--muted); }
 
 .tile .pill {
   position: absolute; top: 5px; left: 5px; display: inline-flex; align-items: center; gap: 3px;
@@ -55,20 +55,19 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .tile .noloc-pill { background: #d93025; }
 .tile .error { background: #b06000; }
 
-/* Same orange checkbox as the one on Google Photos tiles (content.css .wo-check). */
-.tile .check { position: absolute; top: 6px; right: 6px; }
-.check {
-  flex: none; width: 24px; height: 24px; padding: 0;
-  box-sizing: border-box; border: 2px solid #fff; border-radius: 6px;
-  background: rgba(0, 0, 0, 0.35); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  cursor: pointer; transition: transform 0.1s;
+/* Trash bin: removes the photo from the selection (tiles and the viewer). */
+.tile .trash { position: absolute; top: 6px; right: 6px; opacity: 0; pointer-events: none; }
+/* On tiles it only shows while the tile is hovered (or keyboard-focused). */
+.tile:hover .trash, .tile:focus-within .trash { opacity: 1; pointer-events: auto; }
+.trash {
+  flex: none; width: 28px; height: 28px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5); color: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  cursor: pointer; transition: opacity 0.1s, background 0.1s;
 }
-.check:hover { transform: scale(1.08); }
-.check[aria-checked="true"] {
-  background: #f29900 no-repeat center / 17px
-    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg>');
-  border-color: #f29900;
-}
+.trash svg { width: 18px; height: 18px; }
+.trash:hover { background: rgba(0, 0, 0, 0.75); }
 /* Place and date: shown on hover. */
 .tile .info {
   position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 6px 6px;
@@ -76,7 +75,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.75)); color: #fff; font-size: 11px;
   opacity: 0; pointer-events: none;
 }
-.tile:hover .info, .tile:focus-within .info { opacity: 1; pointer-events: auto; }
+.tile:hover .info, .tile:focus-within .info { opacity: 1; } /* never takes clicks: the tile does */
 .tile .line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .dim { opacity: 0.8; }
 .warn { color: var(--warn); }
@@ -88,17 +87,25 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 }
 #viewer[hidden] { display: none; }
 .v-top { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+/* Back arrow on the left; the trash bin and the link on the right. */
+#v-remove { margin-left: auto; }
 #v-open { color: #fff; font-size: 12px; opacity: 0.85; white-space: nowrap; }
-#v-close { margin-left: auto; }
-.v-btn { background: none; border: 0; color: #fff; font-size: 18px; line-height: 1; padding: 4px 6px; }
+/* The viewer's icon buttons (back, remove, previous, next): one size and style. */
+.v-btn {
+  flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background-color: transparent; color: #fff; cursor: pointer;
+}
+.v-btn svg { width: 24px; height: 24px; }
+/* A light wash on top of whatever background the button has. */
+.v-btn:hover { background-image: linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12)); }
 .v-stage { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; }
 #v-img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 #v-img:not([src]), #v-img[src=""] { visibility: hidden; }
 #v-img.low { filter: blur(2px); } /* small preview shown while the larger image loads */
-.v-nav {
-  position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 56px; padding: 0;
-  background: rgba(0, 0, 0, 0.45); border: 0; border-radius: 6px; color: #fff; font-size: 30px; line-height: 1;
-}
+/* Previous / next sit over the photo: the same button on a dark disc, so they show on any photo. */
+.v-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; background-color: rgba(0, 0, 0, 0.45); }
+.v-nav svg { width: 30px; height: 30px; }
 #v-prev { left: 6px; }
 #v-next { right: 6px; }
 .v-nav:disabled { visibility: hidden; }

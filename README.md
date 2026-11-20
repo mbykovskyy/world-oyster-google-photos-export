@@ -30,9 +30,10 @@ World Oyster slideshow (`../world-oyster`).
 - Clicking the toolbar button opens a side panel on the right, for that tab only:
   other tabs don't show it, and it comes back when you return to the tab. Each tab
   you click the button in gets its own panel. It shows your
-  selection as a masonry grid (newest first; hover a tile for its place and date,
-  untick its orange box to remove it; click to open it in Google Photos), lets you switch the picker
-  off, and **Export** everything as one zip (see below).
+  selection as a masonry grid (newest first; hover a tile for its place, date and
+  a trash bin to remove it; click the photo for a larger preview, where
+  ←/→ step through the selection, D or the trash bin removes it, Esc closes),
+  lets you switch the picker off, and **Export** everything as one zip (see below).
 
 ## Export
 
