@@ -1,7 +1,7 @@
 // Runs in the page's MAIN world at document_start, before Google Photos' own code.
 // Reads the media lists Google Photos loads for its grids (library, albums, search)
 // and tells content.js which items are photos and which are videos, so videos get no
-// checkbox and no "Select this photo" button.
+// checkbox and no "Add to World Oyster" button.
 //
 // Every list item looks like [id, [thumbUrl, w, h, ...], takenUtcMs, ..., {...}], and its
 // trailing object has the key "76647426" (video info: duration ms, size, ...) only for videos.

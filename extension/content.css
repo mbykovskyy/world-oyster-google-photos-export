@@ -59,12 +59,6 @@
 .wo-pill svg, .wo-missing svg { width: 13px; height: 13px; flex: none; }
 .wo-noloc { background: #d93025; }
 .wo-error { background: #b06000; }
-.wo-spin {
-  display: inline-block; vertical-align: -1px;
-  width: 9px; height: 9px; margin-right: 6px;
-  border: 2px solid rgba(255, 255, 255, 0.4); border-top-color: #fff; border-radius: 50%;
-  animation: wo-spin 0.8s linear infinite;
-}
 @keyframes wo-spin { to { transform: rotate(360deg); } }
 
 .wo-panel {
@@ -82,18 +76,65 @@
   font: 500 13px/1.2 system-ui, sans-serif;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
-.wo-panel [hidden] { display: none !important; }
+.wo-panel[hidden], .wo-panel [hidden] { display: none !important; }
 .wo-missing { display: inline-flex; align-items: center; gap: 3px; color: #f28b82; font-weight: 600; }
-.wo-panel button {
-  font: inherit;
-  color: #fff;
-  background: #3c4043;
+.wo-add-wrap { display: inline-flex; align-items: center; gap: 6px; }
+/* In Google's viewer toolbar, left of Share / Zoom / Info…; otherwise in the floating bar. */
+.wo-add-wrap.wo-in-toolbar { align-self: center; margin-right: 4px; }
+
+/* "Add to World Oyster": the oyster logo as a round icon button, like Google's. */
+.wo-this {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: 0;
-  border-radius: 14px;
-  padding: 5px 12px;
+  border-radius: 50%;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  white-space: nowrap;
 }
-.wo-panel button:hover { background: #5f6368; }
-.wo-panel button.wo-on { background: #f29900; }
-.wo-this-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.wo-this:hover { background: rgba(255, 255, 255, 0.12); }
+.wo-this img { width: 30px; height: 30px; display: block; pointer-events: none; }
+/* Small badge at the bottom-right of the logo: "+" = click to add (spinning ring
+   while adding), tick = added. */
+.wo-this.wo-add::after,
+.wo-this.wo-adding::after,
+.wo-this.wo-on::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #202124;
+}
+/* Not added yet: a light grey "+" badge (the colour of Google's toolbar icons). */
+.wo-this.wo-add::after,
+.wo-this.wo-adding::after {
+  background: #c4c7c5 no-repeat center / 12px
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="%23202124" stroke-width="3.6" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>');
+}
+/* Adding: an orange ring spins around the "+" (only the ring turns). */
+.wo-this.wo-adding::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  right: -6px;
+  bottom: -6px;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #f29900;
+  border-radius: 50%;
+  animation: wo-spin 0.8s linear infinite;
+}
+/* Added: an orange tick badge. */
+.wo-this.wo-on::after {
+  background: #f29900 no-repeat center / 12px
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="white" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg>');
+}

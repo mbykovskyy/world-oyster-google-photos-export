@@ -19,8 +19,10 @@ World Oyster slideshow (`../world-oyster`).
   Only photos can be selected: video tiles get no box. (`page-hook.js` reads the
   media lists Google Photos loads for its grids, where videos carry extra video
   info, and a video that slips through is dropped once its details show a video file.)
-- When a single photo is open, the floating panel (bottom-left) has an
-  **Select this photo** button.
+- When a single photo is open, the World Oyster logo sits in Google's viewer
+  toolbar, left of Share / Zoom / Info, with a small "+" badge: click it to add the
+  photo. An orange ring spins around the "+" while it's being added, and the badge
+  turns into an orange tick once it's added (click again to remove).
 - The selection is saved in `chrome.storage.local` as you go (one `sel:<photoId>`
   key per photo), so you can close the tab and continue later.
 - Clicking the toolbar button opens a side panel on the right, for that tab only:

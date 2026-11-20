@@ -85,7 +85,7 @@
   window.postMessage({ source: 'wo-media-req' }, location.origin); // the ones seen before we loaded
 
   // An item open in the viewer that no grid listed (e.g. opened from a link): check its
-  // file name with the photo-details RPC before offering "Select this photo".
+  // file name with the photo-details RPC before offering "Add to World Oyster".
   const classifying = new Set();
   function classify(id) {
     if (classifying.has(id) || !loggedIn) return;
@@ -485,33 +485,59 @@
       const on = !!rec && !loading;
       box.setAttribute('aria-checked', String(on));
       box.classList.toggle('wo-loading-check', loading);
-      box.title = loading ? 'World Oyster: loading photo details… (click to cancel)'
-        : 'World Oyster: select for slideshow (Shift+click for a range)';
+      // Same wording as the viewer's oyster button.
+      box.title = loading ? 'Adding to World Oyster…' : on ? 'Added to World Oyster (click to remove)' : 'Add to World Oyster';
       tile.classList.toggle('wo-selected', on);
       setPill(tile, rec);
     }
+  }
+
+  // "Add to World Oyster" button for the photo open in the viewer. It goes into Google's
+  // own viewer toolbar (role="menubar"), left of Share / Zoom / Info…, so it fades in and
+  // out with those buttons. If that toolbar can't be found, it sits in the floating bar.
+  const addWrap = document.createElement('span');
+  addWrap.className = 'wo-add-wrap';
+  addWrap.innerHTML = '<button class="wo-this" type="button"><img alt=""></button>';
+  addWrap.querySelector('img').src = chrome.runtime.getURL('icons/world-oyster.svg');
+
+  // The group of buttons on the right of the visible viewer toolbar.
+  function viewerToolbarGroup() {
+    const group = addWrap.parentElement;
+    const bar = group?.closest('[role="menubar"]');
+    if (bar && bar.getBoundingClientRect().width && getComputedStyle(bar).visibility !== 'hidden') return group;
+    let best = null;
+    for (const m of document.querySelectorAll('[role="menubar"]')) {
+      const r = m.getBoundingClientRect();
+      if (!r.width || !r.height || getComputedStyle(m).visibility === 'hidden') continue;
+      const right = [...m.querySelectorAll('button')].filter((b) => {
+        const br = b.getBoundingClientRect();
+        return br.width && br.left > r.left + r.width / 2;
+      });
+      if (right.length >= 2 && (!best || right.length > best.length)) best = right;
+    }
+    if (!best) return null;
+    let lca = best[0];
+    while (!best.every((b) => lca.contains(b))) lca = lca.parentElement;
+    return lca;
   }
 
   function renderPanel() {
     if (!enabled || !loggedIn) {
       panel?.remove();
       panel = null;
+      addWrap.remove();
       return;
     }
     // Google Photos prunes unknown children of <body>, so live under <html> and re-attach if removed.
     if (!panel?.isConnected) {
       panel = document.createElement('div');
       panel.className = 'wo-panel';
-      panel.innerHTML = `
-        <span class="wo-count"></span>
-        <span class="wo-missing" title="Selected photos without a location"></span>
-        <span class="wo-this-wrap"><button class="wo-this" type="button"></button></span>`;
+      panel.innerHTML = '<span class="wo-missing" title="Selected photos without a location"></span>';
       document.documentElement.appendChild(panel);
     }
-    // Count only photos whose details have loaded (the others are still spinning).
-    const loaded = [...records.values()].filter((r) => r.status !== 'pending');
-    const missing = loaded.filter((r) => r.status === 'ok' && !hasLocation(r)).length;
-    panel.querySelector('.wo-count').textContent = `🦪 ${loaded.length} selected`;
+    // The selected count is on the toolbar badge and in the side panel; the floating bar
+    // only shows how many selected photos have no location.
+    const missing = [...records.values()].filter((r) => r.status === 'ok' && !hasLocation(r)).length;
     const miss = panel.querySelector('.wo-missing');
     miss.hidden = !missing;
     if (missing && miss.dataset.n !== String(missing)) {
@@ -520,22 +546,37 @@
     }
 
     const id = viewerPhotoId();
-    const wrap = panel.querySelector('.wo-this-wrap');
-    const btn = panel.querySelector('.wo-this');
     // Photos only: the button appears once the open item is known to be a photo.
     const isPhoto = !!id && (photoIds.has(id) || records.has(id)) && !videoIds.has(id);
     if (id && !isPhoto && !videoIds.has(id)) classify(id);
-    wrap.hidden = !isPhoto;
     if (isPhoto) {
+      const home = viewerToolbarGroup() || panel;
+      if (addWrap.parentElement !== home) home.prepend(addWrap);
+      addWrap.classList.toggle('wo-in-toolbar', home !== panel);
       const rec = records.get(id);
       const loading = rec?.status === 'pending';
+      const btn = addWrap.querySelector('.wo-this');
       btn.dataset.id = id;
-      if (loading) btn.innerHTML = '<span class="wo-spin"></span>Selecting…';
-      else btn.textContent = rec ? '✓ Selected' : '+ Select this photo';
-      btn.classList.toggle('wo-on', !!rec && !loading);
-      setPill(wrap, rec);
+      // Only touch the DOM when the state changes: every change wakes the MutationObserver.
+      const state = loading ? 'adding' : rec ? 'added' : 'add';
+      if (btn.dataset.state !== state) {
+        btn.dataset.state = state;
+        // The oyster logo is the button; a badge shows the state ("+", "+" with a spinning
+        // ring while adding, orange tick when added), and the tooltip says it in words.
+        const label = { add: 'Add to World Oyster', adding: 'Adding to World Oyster…', added: 'Added to World Oyster (click to remove)' }[state];
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+        btn.classList.toggle('wo-add', state === 'add');
+        btn.classList.toggle('wo-adding', state === 'adding');
+        btn.classList.toggle('wo-on', state === 'added');
+      }
+      setPill(addWrap, rec);
+    } else {
+      addWrap.remove();
     }
+    panel.hidden = miss.hidden && addWrap.parentElement !== panel; // nothing to show: no empty bar
   }
+
 
   let scheduled = false;
   function render() {
@@ -582,7 +623,7 @@
   const SWALLOW = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'keydown', 'keyup', 'keypress'];
   for (const type of SWALLOW) {
     window.addEventListener(type, (e) => {
-      const target = e.target instanceof Element ? e.target.closest('.wo-check, .wo-panel, .wo-pill') : null;
+      const target = e.target instanceof Element ? e.target.closest('.wo-check, .wo-panel, .wo-pill, .wo-add-wrap') : null;
       if (!target) return;
       e.stopPropagation();
       if (target.classList.contains('wo-check')) e.preventDefault();
