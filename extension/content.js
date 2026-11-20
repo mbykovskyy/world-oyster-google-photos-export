@@ -6,6 +6,7 @@
   const SEL_PREFIX = 'sel:';
   const ID_RE = /photo\/(AF1Qip[\w-]+)/;
   const TILE_LINK = 'a[href*="photo/AF1Qip"]';
+  const OYSTER_URL = chrome.runtime.getURL('icons/world-oyster.svg');
   const VIDEO_EXT = /\.(mp4|mov|m4v|3gp|avi|mkv|webm|mts|m2ts|wmv)$/i;
   const PIN_OFF_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/><path d="M3.5 3.5l17 17" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
 
@@ -452,6 +453,33 @@
     pill.title = s.title;
   }
 
+  // ---------- the World Oyster logo control (grid tiles and the viewer button) ----------
+  // One place for its add / adding / added states: the classes (drawn by .wo-oyster in
+  // content.css), the tooltip and the accessible state.
+
+  const OYSTER_LABELS = {
+    add: 'Add to World Oyster',
+    adding: 'Adding to World Oyster…',
+    added: 'Added to World Oyster (click to remove)',
+  };
+
+  // Shown as added only once its details have loaded; until then the "+" spins.
+  const oysterState = (rec) => (!rec ? 'add' : rec.status === 'pending' ? 'adding' : 'added');
+
+  function setOysterState(el, rec) {
+    const state = oysterState(rec);
+    // Only touch the DOM when the state changes: every change wakes the MutationObserver.
+    if (el.dataset.state === state) return state;
+    el.dataset.state = state;
+    el.classList.toggle('wo-add', state === 'add');
+    el.classList.toggle('wo-adding', state === 'adding');
+    el.classList.toggle('wo-on', state === 'added');
+    el.title = OYSTER_LABELS[state];
+    el.setAttribute('aria-label', OYSTER_LABELS[state]);
+    el.setAttribute('aria-checked', String(state === 'added'));
+    return state;
+  }
+
   function renderTiles() {
     const show = enabled && loggedIn;
     for (const link of document.querySelectorAll(TILE_LINK)) {
@@ -472,21 +500,17 @@
         continue;
       }
       if (!box) {
+        // The World Oyster logo with a state badge, like the viewer's button.
         box = document.createElement('div');
-        box.className = 'wo-check';
+        box.className = 'wo-check wo-oyster';
         box.setAttribute('role', 'checkbox');
+        box.innerHTML = `<img alt="" src="${OYSTER_URL}">`;
         tile.appendChild(box);
       }
       // Tiles are recycled while scrolling, so always re-read the id.
       box.dataset.id = id;
       const rec = records.get(id);
-      // Shown as selected only once its details have loaded; until then the box spins.
-      const loading = rec?.status === 'pending';
-      const on = !!rec && !loading;
-      box.setAttribute('aria-checked', String(on));
-      box.classList.toggle('wo-loading-check', loading);
-      // Same wording as the viewer's oyster button.
-      box.title = loading ? 'Adding to World Oyster…' : on ? 'Added to World Oyster (click to remove)' : 'Add to World Oyster';
+      const on = setOysterState(box, rec) === 'added';
       tile.classList.toggle('wo-selected', on);
       setPill(tile, rec);
     }
@@ -497,8 +521,7 @@
   // out with those buttons. If that toolbar can't be found, it sits in the floating bar.
   const addWrap = document.createElement('span');
   addWrap.className = 'wo-add-wrap';
-  addWrap.innerHTML = '<button class="wo-this" type="button"><img alt=""></button>';
-  addWrap.querySelector('img').src = chrome.runtime.getURL('icons/world-oyster.svg');
+  addWrap.innerHTML = `<button class="wo-this wo-oyster" type="button" role="checkbox"><img alt="" src="${OYSTER_URL}"></button>`;
 
   // The group of buttons on the right of the visible viewer toolbar.
   function viewerToolbarGroup() {
@@ -554,22 +577,9 @@
       if (addWrap.parentElement !== home) home.prepend(addWrap);
       addWrap.classList.toggle('wo-in-toolbar', home !== panel);
       const rec = records.get(id);
-      const loading = rec?.status === 'pending';
       const btn = addWrap.querySelector('.wo-this');
       btn.dataset.id = id;
-      // Only touch the DOM when the state changes: every change wakes the MutationObserver.
-      const state = loading ? 'adding' : rec ? 'added' : 'add';
-      if (btn.dataset.state !== state) {
-        btn.dataset.state = state;
-        // The oyster logo is the button; a badge shows the state ("+", "+" with a spinning
-        // ring while adding, orange tick when added), and the tooltip says it in words.
-        const label = { add: 'Add to World Oyster', adding: 'Adding to World Oyster…', added: 'Added to World Oyster (click to remove)' }[state];
-        btn.title = label;
-        btn.setAttribute('aria-label', label);
-        btn.classList.toggle('wo-add', state === 'add');
-        btn.classList.toggle('wo-adding', state === 'adding');
-        btn.classList.toggle('wo-on', state === 'added');
-      }
+      setOysterState(btn, rec);
       setPill(addWrap, rec);
     } else {
       addWrap.remove();

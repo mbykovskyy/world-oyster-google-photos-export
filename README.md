@@ -14,14 +14,16 @@ World Oyster slideshow (`../world-oyster`).
 
 - Open <https://photos.google.com> while signed in. The toolbar button is only
   enabled there, after the page shows you're signed in.
-- Every photo tile gets a box in its top-right corner. Click to select,
-  **Shift+click** to select everything between the last box you clicked and this one.
-  Only photos can be selected: video tiles get no box. (`page-hook.js` reads the
+- Every photo tile gets the World Oyster logo in its top-right corner, with a "+"
+  badge. Click it to add the photo (an orange ring spins around the logo while its
+  details load, then the badge turns into an orange tick; click again to remove).
+  **Shift+click** adds everything between the last tile you clicked and this one.
+  Only photos can be selected: video tiles get no logo. (`page-hook.js` reads the
   media lists Google Photos loads for its grids, where videos carry extra video
   info, and a video that slips through is dropped once its details show a video file.)
 - When a single photo is open, the World Oyster logo sits in Google's viewer
   toolbar, left of Share / Zoom / Info, with a small "+" badge: click it to add the
-  photo. An orange ring spins around the "+" while it's being added, and the badge
+  photo. An orange ring spins around the logo while it's being added, and the badge
   turns into an orange tick once it's added (click again to remove).
 - The selection is saved in `chrome.storage.local` as you go (one `sel:<photoId>`
   key per photo), so you can close the tab and continue later.
