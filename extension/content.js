@@ -483,6 +483,9 @@
         newValue ? records.set(id, newValue) : records.delete(id);
       }
     }
+    // Selection emptied (e.g. "Clear all" in the side panel): the next Shift+click starts
+    // fresh instead of ranging from a photo that's no longer selected.
+    if (!records.size) lastClickedId = null;
     render();
     pumpDetails();
   });

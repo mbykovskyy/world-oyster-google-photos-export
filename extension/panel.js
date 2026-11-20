@@ -344,7 +344,11 @@ $('clear').onclick = async () => {
   clearTimeout(clearArmed);
   clearArmed = null;
   btn.textContent = 'Clear all';
-  await chrome.storage.local.remove((await loadSelection()).map((r) => SEL_PREFIX + r.id));
+  const keys = (await loadSelection()).map((r) => SEL_PREFIX + r.id);
+  // The last export's notes ("3 failed", "2 skipped") are about photos no longer selected;
+  // a running export keeps its progress.
+  if (!exportRunning) keys.push('exportProgress');
+  await chrome.storage.local.remove(keys);
 };
 
 $('enabled').onchange = (e) => chrome.storage.local.set({ enabled: e.target.checked });
