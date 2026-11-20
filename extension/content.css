@@ -43,8 +43,31 @@
 /* The World Oyster logo with a state badge: on grid tiles (.wo-check) and in the
    viewer toolbar (.wo-this). Badge at the bottom-right: "+" = click to add, orange
    tick = added; while adding, an orange ring spins around the logo. */
-.wo-oyster { --badge: 16px; position: relative; cursor: pointer; }
-.wo-oyster img { display: block; pointer-events: none; }
+/* --size: the control, --img: the logo inside it, --badge: the badge diameter. */
+.wo-oyster {
+  --size: 40px;
+  --img: 30px;
+  --badge: 16px;
+  --gap: 2px; /* see-through ring between the badge and what's behind it */
+  /* Badge centre, from the control's top-left (the badge sits 2px past its corner). */
+  --badge-c: calc(var(--size) + 2px - var(--badge) / 2);
+  position: relative;
+  width: var(--size);
+  height: var(--size);
+  cursor: pointer;
+}
+.wo-oyster img { display: block; width: var(--img); height: var(--img); pointer-events: none; }
+/* Cut a hole, a little bigger than the badge, out of the logo behind it, so the photo
+   shows through around the badge. (The spinning ring isn't cut.) */
+.wo-oyster.wo-add img,
+.wo-oyster.wo-adding img,
+.wo-oyster.wo-on img {
+  --c: calc(var(--badge-c) - (var(--size) - var(--img)) / 2); /* in the logo's own box */
+  -webkit-mask: radial-gradient(circle at var(--c) var(--c),
+    transparent calc(var(--badge) / 2 + var(--gap)), #000 calc(var(--badge) / 2 + var(--gap) + 0.5px));
+  mask: radial-gradient(circle at var(--c) var(--c),
+    transparent calc(var(--badge) / 2 + var(--gap)), #000 calc(var(--badge) / 2 + var(--gap) + 0.5px));
+}
 .wo-oyster.wo-add::after,
 .wo-oyster.wo-adding::after,
 .wo-oyster.wo-on::after {
@@ -59,7 +82,6 @@
   background-repeat: no-repeat;
   background-position: center;
   background-size: calc(var(--badge) * 0.75);
-  box-shadow: 0 0 0 2px #202124;
 }
 /* Not added yet: a light grey "+" (the colour of Google's toolbar icons). */
 .wo-oyster.wo-add::after,
@@ -87,13 +109,13 @@
 
 /* On grid tiles: top-right, straight on the photo (no disc). */
 .wo-check {
+  --size: 34px;
+  --img: 26px;
   --badge: 14px;
   position: absolute;
   top: 6px;
   right: 6px;
   z-index: 10;
-  width: 34px;
-  height: 34px;
   border-radius: 50%;
   background: transparent;
   display: flex;
@@ -104,12 +126,11 @@
 }
 .wo-check:hover, .wo-check.wo-adding, .wo-check.wo-on { opacity: 1; }
 .wo-check:hover { transform: scale(1.08); }
-.wo-check img { width: 26px; height: 26px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)); } /* shows on light photos */
+/* Shadow on the whole control (not the logo), so it follows the cut-out: shows on light photos. */
+.wo-check { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)); }
 
 /* In the viewer toolbar: a round icon button, like Google's. */
 .wo-this {
-  width: 40px;
-  height: 40px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -119,4 +140,3 @@
   justify-content: center;
 }
 .wo-this:hover { background: rgba(255, 255, 255, 0.12); }
-.wo-this img { width: 30px; height: 30px; }
